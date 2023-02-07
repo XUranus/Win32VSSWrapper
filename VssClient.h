@@ -6,6 +6,7 @@
 #include <iterator>
 #include <optional>
 #include <vector>
+#include <map>
 
 #define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
@@ -16,9 +17,6 @@
 #include <comdef.h>
 
 namespace Win32VSSWrapper {
-
-std::optional<std::wstring> VssID2WStr(const VSS_ID& vssID);
-std::optional<VSS_ID> VssIDfromWStr(const std::wstring& vssID);
 
 class VssSnapshotProperty {
 public:
@@ -60,22 +58,28 @@ private:
 	VSS_SNAPSHOT_STATE m_status;
 };
 
+
+struct SnapshotSetResultW {
+	std::vector<std::wstring> wSnapshotIDList;
+	std::wstring wSnapshotSetID;
+};
+
 class VssClient {
 public:
 	VssClient();
 	~VssClient();
-	bool CreateSnapshotW(const std::wstring& wVolumePath);
-	bool CreateSnapshotW(const std::vector<std::wstring>& wVolumePath);
+	std::optional<SnapshotSetResultW> CreateSnapshotW(const std::wstring& wVolumePath);
+	//bool CreateSnapshotW(const std::vector<std::wstring>& wVolumePath);
 	bool DeleteSnapshotW(const std::wstring& wShadowID);
 	std::optional<VssSnapshotProperty> GetSnapshotProperty(const VSS_ID& snapshotID);
 private:
 	bool Init();
 	bool Connect();
-	bool BackupCompleteSync();
+	bool WaitAndCheckForAsyncOperation(IVssAsync* pAsync);
 	void ReleaseResources();
 private:
-	IVssBackupComponents* m_components = nullptr;
-	IVssAsync* m_async = nullptr;
+	bool m_comInitialized = false;
+	IVssBackupComponents* m_pVssObject = nullptr;
 };
 
 }

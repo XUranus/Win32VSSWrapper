@@ -5,6 +5,7 @@
 #include <locale>
 #include <codecvt>
 #include <optional>
+#include <atlbase.h>
 
 using namespace std;
 using namespace Win32VSSWrapper;
@@ -18,19 +19,22 @@ constexpr auto VSS_ID_MAX_LEN = 100;
 
 std::optional<std::wstring> VssID2WStr(const VSS_ID& vssID)
 {
-	WCHAR wVssIDBuf[VSS_ID_MAX_LEN] = { L'\0' };
-	int ret = ::StringFromGUID2(vssID, wVssIDBuf, VSS_ID_MAX_LEN);
-	if (ret == 0) {
+	LPOLESTR wVssIDBuf = nullptr;
+	HRESULT hr = ::StringFromIID(vssID, &wVssIDBuf);
+	if (FAILED(hr)) {
 		return std::nullopt;
 	}
-	return std::make_optional<std::wstring>(wVssIDBuf);
+	std::wstring wVssIDStr(wVssIDBuf);
+	::CoTaskMemFree(wVssIDBuf);
+	wVssIDBuf = nullptr;
+	return std::make_optional<std::wstring>(wVssIDStr);
 }
 
 std::optional<VSS_ID> VssIDfromWStr(const std::wstring& vssIDWstr)
 {
 	VSS_ID vssID;
-	bool ret = ::CLSIDFromString(vssIDWstr.c_str(), &vssID);
-	if (!ret) {
+	HRESULT hr = ::IIDFromString(vssIDWstr.c_str(), &vssID);
+	if (FAILED(hr)) {
 		return std::nullopt;
 	}
 	return std::make_optional<VSS_ID>(vssID);
@@ -39,7 +43,7 @@ std::optional<VSS_ID> VssIDfromWStr(const std::wstring& vssIDWstr)
 #define CHECK_HR_RETURN_FALSE(HR, FUNC) \
 	do { \
 		_com_error err(HR); \
-		if (HR != S_OK) { \
+		if (FAILED(HR)) { \
 			fprintf(stderr, "Failed to call " ## FUNC ## ", %s\n", err.ErrorMessage()); \
 			return false; \
 		} \
@@ -51,6 +55,15 @@ std::optional<VSS_ID> VssIDfromWStr(const std::wstring& vssIDWstr)
 		_com_error err(HR); \
 		if (HR != S_OK) { \
 			fprintf(stderr, "Failed to call " ## FUNC ## ", %s\n", err.ErrorMessage()); \
+			return RET; \
+		} \
+	} \
+	while (0)
+
+#define CHECK_BOOL_RETURN(BOOLVALUE, FUNC, RET) \
+	do { \
+		if ((!BOOLVALUE)) { \
+			fprintf(stderr, "Failed to call " ## FUNC ## "\n"); \
 			return RET; \
 		} \
 	} \
@@ -90,47 +103,82 @@ VssSnapshotProperty::VssSnapshotProperty(const VSS_SNAPSHOT_PROP& prop)
 	m_status = prop.m_eStatus;
 }
 
-bool VssClient::CreateSnapshotW(const std::vector<std::wstring>& wVolumePath)
-{
-	// TODP
-	return false;
-}
+// std::optional<std::wstring> VssClient::CreateSnapshotW(const std::vector<std::wstring>& wVolumePath)
+// {
+// 	// TODP
+// 	return false;
+// }
 
-bool VssClient::CreateSnapshotW(const std::wstring& wVolumePath)
+std::optional<SnapshotSetResultW> VssClient::CreateSnapshotW(const std::wstring& wVolumePath)
 {
-	VSS_ID snapshot_id;
+	// rc = m_pVssObject->GatherWriterMetadata(&m_async);
+	// CHECK_HR_RETURN_FALSE(rc, "GatherWriterMetadata");
+	// rc = m_async->Wait();
+	// CHECK_HR_RETURN_FALSE(rc, "m_async->Wait");
+
+	VSS_ID snapshotSetID;
+	HRESULT rc = m_pVssObject->StartSnapshotSet(&snapshotSetID);
+	CHECK_HR_RETURN(rc, "StartSnapshotSet", std::nullopt);
+
+	VSS_ID snapshotID;
 	WCHAR volume[MAX_PATH] = { L'\0' };
 	wcscpy_s(volume, MAX_PATH, wVolumePath.c_str());
-	HRESULT rc = m_components->AddToSnapshotSet(volume, GUID_NULL, &snapshot_id);
-    CHECK_HR_RETURN_FALSE(rc, "AddToSnapshotSet");
+	rc = m_pVssObject->AddToSnapshotSet(volume, GUID_NULL, &snapshotID);
+    CHECK_HR_RETURN(rc, "AddToSnapshotSet", std::nullopt);
 
-	/* Generate Snapshot */
-	rc = m_components->SetBackupState(true, false, VSS_BT_FULL, false);
-	CHECK_HR_RETURN_FALSE(rc, "SetBackupState");
+	/* Generate Snapshot */ // TODO: move to init
+	rc = m_pVssObject->SetBackupState(true, false, VSS_BT_FULL, false);
+	CHECK_HR_RETURN(rc, "SetBackupState", std::nullopt);
 
-	rc = m_components->PrepareForBackup(&m_async);
-	CHECK_HR_RETURN_FALSE(rc, "PrepareForBackup");
-	rc = m_async->Wait();
-	CHECK_HR_RETURN_FALSE(rc, "m_async->Wait");
+	CComPtr<IVssAsync> pAsync;
+	rc = m_pVssObject->PrepareForBackup(&pAsync);
+	CHECK_HR_RETURN(rc, "PrepareForBackup", std::nullopt);
+	CHECK_BOOL_RETURN(WaitAndCheckForAsyncOperation(pAsync), "pAsync1->Wait", std::nullopt);
 
-	rc = m_components->DoSnapshotSet(&m_async);
-	CHECK_HR_RETURN_FALSE(rc, "DoSnapshotSet");
-	rc = m_async->Wait();
-	CHECK_HR_RETURN_FALSE(rc, "m_async->Wait");
+	rc = m_pVssObject->DoSnapshotSet(&pAsync);
+	CHECK_HR_RETURN(rc, "DoSnapshotSet", std::nullopt);
+	CHECK_BOOL_RETURN(WaitAndCheckForAsyncOperation(pAsync), "pAsync2->Wait", std::nullopt);
 
-	return BackupCompleteSync();
+	//rc = m_pVssObject->BackupComplete(&pAsync);
+	//CHECK_HR_RETURN(rc, "BackupComplete", std::nullopt); // TODO:: try to figure out why crashed
+	//CHECK_BOOL_RETURN(WaitAndCheckForAsyncOperation(pAsync), "pAsync3->Wait", std::nullopt);
+	//std::cout << "bp3" << std::endl;
+
+	std::optional<std::wstring> wSnapshotSetIDStr = VssID2WStr(snapshotSetID);
+	std::optional<std::wstring> wSnapshotIDStr = VssID2WStr(snapshotID);
+	if (!wSnapshotIDStr || !wSnapshotSetIDStr) {
+		// TODO:: fatal error, try throw exception
+		return std::nullopt;
+	}
+	
+	SnapshotSetResultW wResult;
+	wResult.wSnapshotIDList.emplace_back(wSnapshotIDStr.value());
+	wResult.wSnapshotSetID = wSnapshotSetIDStr.value();
+	return std::make_optional<SnapshotSetResultW>(wResult);
 }
 
-bool VssClient::DeleteSnapshotW(const std::wstring& wShadowID)
+bool VssClient::DeleteSnapshotW(const std::wstring& wSnapshotID)
 {
-	// TODO
-	return false;
+	LONG lSnapshots = 0;
+    VSS_ID idNonDeletedSnapshotID = GUID_NULL;
+	std::optional<VSS_ID> snapshotID = VssIDfromWStr(wSnapshotID);
+	if (!snapshotID) { /* invalid VSS ID */
+		return false;
+	}
+    HRESULT hr = m_pVssObject->DeleteSnapshots(
+        snapshotID.value(), 
+        VSS_OBJECT_SNAPSHOT,
+        FALSE,
+        &lSnapshots,
+        &idNonDeletedSnapshotID);
+	CHECK_HR_RETURN(hr, "DeleteSnapshots", false);
+	return true;
 }
 
 std::optional<VssSnapshotProperty> VssClient::GetSnapshotProperty(const VSS_ID& snapshotID)
 {
 	VSS_SNAPSHOT_PROP snapshotProp;
-	HRESULT rc = m_components->GetSnapshotProperties(snapshotID, &snapshotProp);
+	HRESULT rc = m_pVssObject->GetSnapshotProperties(snapshotID, &snapshotProp);
 	CHECK_HR_RETURN(rc, "GetSnapshotProperties", std::nullopt);
 	VssSnapshotProperty property(snapshotProp);
 	::VssFreeSnapshotProperties(&snapshotProp);
@@ -152,55 +200,51 @@ VssClient::~VssClient()
 /* initialzie COM */
 bool VssClient::Init()
 {
-	HRESULT rc = ::CoInitialize(nullptr);
+	HRESULT rc = ::CoInitializeEx(nullptr, COINIT::COINIT_MULTITHREADED);
     CHECK_HR_RETURN_FALSE(rc, "CoInitialize");
+	m_comInitialized = true;
 	return true;
 }
 
 bool VssClient::Connect()
 {
-	HRESULT rc = ::CreateVssBackupComponents(&m_components);
+	HRESULT rc = ::CreateVssBackupComponents(&m_pVssObject);
 	CHECK_HR_RETURN_FALSE(rc, "CreateVssBackupComponents");
 
-	rc = m_components->InitializeForBackup();
+	rc = m_pVssObject->InitializeForBackup();
 	CHECK_HR_RETURN_FALSE(rc, "InitializeForBackup");
 
-	rc = m_components->GatherWriterMetadata(&m_async);
-	CHECK_HR_RETURN_FALSE(rc, "GatherWriterMetadata");
-	rc = m_async->Wait();
-	CHECK_HR_RETURN_FALSE(rc, "m_async->Wait");
-
-	rc = m_components->SetContext(VSS_CTX_BACKUP);
+	rc = m_pVssObject->SetContext(VSS_CTX_BACKUP);
 	CHECK_HR_RETURN_FALSE(rc, "SetContext");
-
-	VSS_ID snapshot_set_id;
-	rc = m_components->StartSnapshotSet(&snapshot_set_id);
-	CHECK_HR_RETURN_FALSE(rc, "StartSnapshotSet");
 
 	return true;
 }
 
-bool VssClient::BackupCompleteSync()
+bool VssClient::WaitAndCheckForAsyncOperation(IVssAsync* pAsync)
 {
-	if (m_components == nullptr) {
-		return false;
-	}
+    HRESULT rc = pAsync->Wait();
+	CHECK_HR_RETURN_FALSE(rc, "WaitAndCheckForAsyncOperation pAsync->Wait");
 
-	HRESULT rc = m_components->BackupComplete(&m_async);
-	CHECK_HR_RETURN_FALSE(rc, "BackupComplete");
-	
-	rc = m_async->Wait();
-	CHECK_HR_RETURN_FALSE(rc, "m_async->Wait");
-	
+    /* Check the result of the asynchronous operation */
+    HRESULT hrReturned = S_OK;
+    rc = pAsync->QueryStatus(&hrReturned, nullptr);
+	CHECK_HR_RETURN_FALSE(rc, "WaitAndCheckForAsyncOperation pAsync->QueryStatus");
+
+    /* Check if the async operation succeeded... */
+    CHECK_HR_RETURN_FALSE(hrReturned, "WaitAndCheckForAsyncOperation return false");
+
 	return true;
 }
 
 void VssClient::ReleaseResources()
 {
-	if (m_components != nullptr) {
-		m_components->Release();
+	if (m_pVssObject != nullptr) {
+		m_pVssObject->Release();
+		m_pVssObject = nullptr;
+	}
+	if (m_comInitialized) {
 		::CoUninitialize();
-		m_components = nullptr;
+		m_comInitialized = false;
 	}
 }
 
