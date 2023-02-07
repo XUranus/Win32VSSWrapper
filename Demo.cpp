@@ -1,12 +1,10 @@
-﻿#include <iostream>
+﻿#pragma execution_character_set("utf-8")
+#ifdef WIN32
+
+#include <iostream>
 #include <fstream>
 #include <chrono>
 #include <ctime>
-
-#ifdef WIN32
-#pragma execution_character_set("utf-8")
-#endif
-
 #include "VssClient.h"
 #define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
@@ -34,16 +32,17 @@ int wmain(int argc, WCHAR** argv)
 	}
 
 	std::wstring wVolumePath = argv[1];
-	WCHAR volume[MAX_PATH + 1] = { '\0' };
-    if (::GetVolumePathNameW(wVolumePath.c_str(), volume, MAX_PATH) == FALSE) {
+	WCHAR wVolume[MAX_PATH + 1] = { '\0' };
+    if (::GetVolumePathNameW(wVolumePath.c_str(), wVolume, MAX_PATH) == FALSE) {
         fprintf(stderr, "Failed to GetVolumePathNameW\n");
         return -1;
     }
-	std::wcout << "volumePath: " << std::wstring(volume) << std::endl;
+	std::wcout << "volumePath: " << std::wstring(wVolume) << std::endl;
 	
 
 	VssClient VssClient;
-	VssClient.CreateSnapshotW(wVolumePath);
+	VssClient.CreateSnapshotW(wVolume);
 }
+
 
 #endif

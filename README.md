@@ -2,7 +2,7 @@
  > C++ API wrapper for Windows Volume Shadow Service
 
 # Require
- - C++11
+ - C++17
  - MSVC
 
 ## Build

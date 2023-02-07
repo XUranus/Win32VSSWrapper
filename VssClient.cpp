@@ -4,17 +4,47 @@
 #define _SILENCE_CXX17_CODECVT_HEADER_DEPRECATION_WARNING 1
 #include <locale>
 #include <codecvt>
-#endif
+#include <optional>
 
 using namespace std;
+using namespace Win32VSSWrapper;
 
 namespace {
-#ifdef WIN32
 constexpr auto VOLUME_BUFFER_MAX_LEN = MAX_PATH;
 constexpr auto VOLUME_PATH_MAX_LEN = MAX_PATH + 1;
 constexpr auto DEVICE_BUFFER_MAX_LEN = MAX_PATH;
-#endif
+constexpr auto VSS_ID_MAX_LEN = 100;
 }
+
+std::optional<std::wstring> VssID2WStr(const VSS_ID& vssID)
+{
+	WCHAR wVssIDBuf[VSS_ID_MAX_LEN] = { L'\0' };
+	int ret = ::StringFromGUID2(vssID, wVssIDBuf, VSS_ID_MAX_LEN);
+	if (ret == 0) {
+		return std::nullopt;
+	}
+	return std::make_optional<std::wstring>(wVssIDBuf);
+}
+
+std::optional<VSS_ID> VssIDfromWStr(const std::wstring& vssIDWstr)
+{
+	VSS_ID vssID;
+	bool ret = ::CLSIDFromString(vssIDWstr.c_str(), &vssID);
+	if (!ret) {
+		return std::nullopt;
+	}
+	return std::make_optional<VSS_ID>(vssID);
+}
+
+#define CHECK_HR_RETURN_FALSE(HR, FUNC) \
+	do { \
+		_com_error err(HR); \
+		if (HR != S_OK) { \
+			fprintf(stderr, "Failed to call " ## FUNC ## ", %s\n", err.ErrorMessage()); \
+			return false; \
+		} \
+	} \
+	while (0)
 
 #define CHECK_HR_RETURN(HR, FUNC, RET) \
 	do { \
@@ -22,14 +52,11 @@ constexpr auto DEVICE_BUFFER_MAX_LEN = MAX_PATH;
 		if (HR != S_OK) { \
 			fprintf(stderr, "Failed to call " ## FUNC ## ", %s\n", err.ErrorMessage()); \
 			return RET; \
-		}
+		} \
 	} \
 	while (0)
 
-namespace Win32VSSWrapper {
 
-
-#ifdef WIN32
 std::wstring Utf8ToUtf16(const std::string& str)
 {
 	using ConvertTypeX = std::codecvt_utf8_utf16<wchar_t>;
@@ -44,10 +71,9 @@ std::string Utf16ToUtf8(const std::wstring& wstr)
 	std::wstring_convert<ConvertTypeX> converterX;
 	return converterX.to_bytes(wstr);
 }
-#endif
 
 
-VssSnapshotProperty::VssSnapshotProperty(const std::VSS_SNAPSHOT_PROP& prop)
+VssSnapshotProperty::VssSnapshotProperty(const VSS_SNAPSHOT_PROP& prop)
 {
 	m_snapshotID = prop.m_SnapshotId;
 	m_shapshotSetID = prop.m_SnapshotSetId;
@@ -57,53 +83,60 @@ VssSnapshotProperty::VssSnapshotProperty(const std::VSS_SNAPSHOT_PROP& prop)
 	m_wOriginatingMachine = prop.m_pwszOriginatingMachine;
 	m_wServiceMachine = prop.m_pwszServiceMachine;
 	m_wExposedName = prop.m_pwszExposedName;
-	m_wExposedName = m_prop.m_pwszExposedPath;
+	m_wExposedName = prop.m_pwszExposedPath;
 	m_providerID = prop.m_ProviderId;
 	m_napshotAttributes = prop.m_lSnapshotAttributes;
 	m_createTime = prop.m_tsCreationTimestamp;
 	m_status = prop.m_eStatus;
 }
 
-void VssClient::CreateSnapshotW(const std::vector<std::wstring& wVolumePath)
+bool VssClient::CreateSnapshotW(const std::vector<std::wstring>& wVolumePath)
 {
-
+	// TODP
+	return false;
 }
 
-void VssClient::CreateSnapshotW(const std::wstring& wVolumePath)
+bool VssClient::CreateSnapshotW(const std::wstring& wVolumePath)
 {
 	VSS_ID snapshot_id;
-	HRESULT rc = m_components->AddToSnapshotSetW(wVolumePath.c_str(), GUID_NULL, &snapshot_id);
-    CHECK_HR_RETURN(rc, "AddToSnapshotSet", -1);
+	WCHAR volume[MAX_PATH] = { L'\0' };
+	wcscpy_s(volume, MAX_PATH, wVolumePath.c_str());
+	HRESULT rc = m_components->AddToSnapshotSet(volume, GUID_NULL, &snapshot_id);
+    CHECK_HR_RETURN_FALSE(rc, "AddToSnapshotSet");
 
 	/* Generate Snapshot */
-	rc = components->SetBackupState(true, false, VSS_BT_FULL, false);
-	CHECK_HR_RETURN(rc, "SetBackupState", -1);
+	rc = m_components->SetBackupState(true, false, VSS_BT_FULL, false);
+	CHECK_HR_RETURN_FALSE(rc, "SetBackupState");
 
-	rc = components->PrepareForBackup(&async);
-	CHECK_HR_RETURN(rc, "PrepareForBackup", -1);
-	rc = async->Wait();
-	CHECK_HR_RETURN(rc, "async->Wait", -1);
+	rc = m_components->PrepareForBackup(&m_async);
+	CHECK_HR_RETURN_FALSE(rc, "PrepareForBackup");
+	rc = m_async->Wait();
+	CHECK_HR_RETURN_FALSE(rc, "m_async->Wait");
 
-	rc = components->DoSnapshotSet(&async);
-	CHECK_HR_RETURN(rc, "DoSnapshotSet", -1);
-	rc = async->Wait();
-	CHECK_HR_RETURN(rc, "async->Wait", -1);
+	rc = m_components->DoSnapshotSet(&m_async);
+	CHECK_HR_RETURN_FALSE(rc, "DoSnapshotSet");
+	rc = m_async->Wait();
+	CHECK_HR_RETURN_FALSE(rc, "m_async->Wait");
+
+	return BackupCompleteSync();
 }
 
-VssSnapshotProperty GetSnapshotProperty(const VSS_ID& snapshotID)
+bool VssClient::DeleteSnapshotW(const std::wstring& wShadowID)
+{
+	// TODO
+	return false;
+}
+
+std::optional<VssSnapshotProperty> VssClient::GetSnapshotProperty(const VSS_ID& snapshotID)
 {
 	VSS_SNAPSHOT_PROP snapshotProp;
-	rc = m_components->GetSnapshotProperties(snapshotID, &snapshotProp);
-	CHECK_HR_RETURN(rc, "GetSnapshotProperties", -1);
-	VssSnapshotProperty prop(snapshotProp);
-	::VssFreeSnapshotProperties(snapshotProp);
-	return prop;
+	HRESULT rc = m_components->GetSnapshotProperties(snapshotID, &snapshotProp);
+	CHECK_HR_RETURN(rc, "GetSnapshotProperties", std::nullopt);
+	VssSnapshotProperty property(snapshotProp);
+	::VssFreeSnapshotProperties(&snapshotProp);
+	return std::make_optional<VssSnapshotProperty>(property);
 }
 
-void VssClient::QuerySnapshotInfo(VSS_ID)
-{
-	VSS_SNAPSHOT_PROP 
-}
 
 VssClient::VssClient()
 {
@@ -117,47 +150,58 @@ VssClient::~VssClient()
 }
 
 /* initialzie COM */
-void VssClient::Init()
+bool VssClient::Init()
 {
 	HRESULT rc = ::CoInitialize(nullptr);
-    CHECK_HR_RETURN(rc, "CoInitialize", -1);
+    CHECK_HR_RETURN_FALSE(rc, "CoInitialize");
+	return true;
 }
 
-void VssClient::Connect()
+bool VssClient::Connect()
 {
-	rc = ::CreateVssBackupComponents(&m_components);
-	CHECK_HR_RETURN(rc, "CreateVssBackupComponents", -1);
+	HRESULT rc = ::CreateVssBackupComponents(&m_components);
+	CHECK_HR_RETURN_FALSE(rc, "CreateVssBackupComponents");
 
 	rc = m_components->InitializeForBackup();
-	CHECK_HR_RETURN(rc, "InitializeForBackup", -1);
+	CHECK_HR_RETURN_FALSE(rc, "InitializeForBackup");
 
-	IVssAsync *async;
-	rc = m_components->GatherWriterMetadata(&async);
-	CHECK_HR_RETURN(rc, "GatherWriterMetadata", -1);
-	rc = async->Wait();
-	CHECK_HR_RETURN(rc, "async->Wait", -1);
+	rc = m_components->GatherWriterMetadata(&m_async);
+	CHECK_HR_RETURN_FALSE(rc, "GatherWriterMetadata");
+	rc = m_async->Wait();
+	CHECK_HR_RETURN_FALSE(rc, "m_async->Wait");
 
 	rc = m_components->SetContext(VSS_CTX_BACKUP);
-	CHECK_HR_RETURN(rc, "SetContext", -1);
+	CHECK_HR_RETURN_FALSE(rc, "SetContext");
 
 	VSS_ID snapshot_set_id;
 	rc = m_components->StartSnapshotSet(&snapshot_set_id);
-	CHECK_HR_RETURN(rc, "StartSnapshotSet", -1);	
+	CHECK_HR_RETURN_FALSE(rc, "StartSnapshotSet");
+
+	return true;
+}
+
+bool VssClient::BackupCompleteSync()
+{
+	if (m_components == nullptr) {
+		return false;
+	}
+
+	HRESULT rc = m_components->BackupComplete(&m_async);
+	CHECK_HR_RETURN_FALSE(rc, "BackupComplete");
+	
+	rc = m_async->Wait();
+	CHECK_HR_RETURN_FALSE(rc, "m_async->Wait");
+	
+	return true;
 }
 
 void VssClient::ReleaseResources()
 {
 	if (m_components != nullptr) {
-		HRESULT rc = components->BackupComplete(&m_async);
-		CHECK_HR_RETURN(rc, "BackupComplete", -1);
-		
-		HRESULT rc = async->Wait();
-		CHECK_HR_RETURN(rc, "async->Wait", -1);
-
 		m_components->Release();
 		::CoUninitialize();
 		m_components = nullptr;
 	}
 }
 
-}
+#endif

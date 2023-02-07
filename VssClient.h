@@ -17,8 +17,8 @@
 
 namespace Win32VSSWrapper {
 
-std::string VssID2Str(VSS_ID);
-VSS_ID VssIDfromStr(const std::string& vssID);
+std::optional<std::wstring> VssID2WStr(const VSS_ID& vssID);
+std::optional<VSS_ID> VssIDfromWStr(const std::wstring& vssID);
 
 class VssSnapshotProperty {
 public:
@@ -64,15 +64,18 @@ class VssClient {
 public:
 	VssClient();
 	~VssClient();
-	void CreateSnapshotW(const std::wstring& wVolumePath);
-	void DeleteSnapshotW(const std::wstring& wShadowID);
-	VssSnapshotProperty GetSnapshotProperty(const VSS_ID& snapshotID);
-	//void QuerySnapshot();
+	bool CreateSnapshotW(const std::wstring& wVolumePath);
+	bool CreateSnapshotW(const std::vector<std::wstring>& wVolumePath);
+	bool DeleteSnapshotW(const std::wstring& wShadowID);
+	std::optional<VssSnapshotProperty> GetSnapshotProperty(const VSS_ID& snapshotID);
 private:
-	void Init();
+	bool Init();
+	bool Connect();
+	bool BackupCompleteSync();
 	void ReleaseResources();
 private:
 	IVssBackupComponents* m_components = nullptr;
+	IVssAsync* m_async = nullptr;
 };
 
 }
