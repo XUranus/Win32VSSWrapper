@@ -64,13 +64,20 @@ struct SnapshotSetResultW {
 	std::wstring wSnapshotSetID;
 };
 
+struct SnapshotSetResult {
+	std::vector<std::string> snapshotIDList;
+	std::string snapshotSetID;
+};
+
 class VssClient {
 public:
 	VssClient();
 	~VssClient();
 	std::optional<SnapshotSetResultW> CreateSnapshotW(const std::wstring& wVolumePath);
+	std::optional<SnapshotSetResult> CreateSnapshot(const std::string& volumePath);
 	//bool CreateSnapshotW(const std::vector<std::wstring>& wVolumePath);
-	bool DeleteSnapshotW(const std::wstring& wShadowID);
+	bool DeleteSnapshotW(const std::wstring& wSnapshotID);
+	bool DeleteSnapshot(const std::string& snapshotID);
 	std::optional<VssSnapshotProperty> GetSnapshotProperty(const VSS_ID& snapshotID);
 private:
 	bool Init();

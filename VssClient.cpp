@@ -157,6 +157,21 @@ std::optional<SnapshotSetResultW> VssClient::CreateSnapshotW(const std::wstring&
 	return std::make_optional<SnapshotSetResultW>(wResult);
 }
 
+std::optional<SnapshotSetResult> VssClient::CreateSnapshot(const std::string& volumePath)
+{
+	std::wstring wVolumePath = Utf8ToUtf16(volumePath);
+	std::optional<SnapshotSetResultW> wResult = CreateSnapshotW(wVolumePath);
+	if (!wResult) {
+		return std::nullopt;
+	}
+	SnapshotSetResult result;
+	result.snapshotSetID = Utf16ToUtf8(wResult->wSnapshotSetID);
+	for (const std::wstring& wSnapshotID: wResult->wSnapshotIDList) {
+		result.snapshotIDList.emplace_back(Utf16ToUtf8(wSnapshotID));
+	}
+	return std::make_optional<SnapshotSetResult>(result);
+}
+
 bool VssClient::DeleteSnapshotW(const std::wstring& wSnapshotID)
 {
 	LONG lSnapshots = 0;
@@ -173,6 +188,12 @@ bool VssClient::DeleteSnapshotW(const std::wstring& wSnapshotID)
         &idNonDeletedSnapshotID);
 	CHECK_HR_RETURN(hr, "DeleteSnapshots", false);
 	return true;
+}
+
+bool VssClient::DeleteSnapshot(const std::string& snapshotID)
+{
+	std::wstring wSnapshotID = Utf8ToUtf16(snapshotID);
+	return DeleteSnapshotW(wSnapshotID);
 }
 
 std::optional<VssSnapshotProperty> VssClient::GetSnapshotProperty(const VSS_ID& snapshotID)
