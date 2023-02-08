@@ -59,26 +59,28 @@ private:
 };
 
 
-struct SnapshotSetResultW {
-	std::vector<std::wstring> wSnapshotIDList;
-	std::wstring wSnapshotSetID;
-};
-
-struct SnapshotSetResult {
-	std::vector<std::string> snapshotIDList;
-	std::string snapshotSetID;
+class SnapshotSetResult {
+public:
+	std::vector<std::wstring> m_wSnapshotIDList;
+	std::wstring m_wSnapshotSetID;
+public:
+	std::vector<std::string> SnapshotIDList() const;
+	std::string SnapshotSetID() const;
+	std::vector<std::wstring> SnapshotIDListW() const;
+	std::wstring SnapshotSetIDW() const;
 };
 
 class VssClient {
 public:
 	VssClient();
 	~VssClient();
-	std::optional<SnapshotSetResultW> CreateSnapshotW(const std::wstring& wVolumePath);
+	std::optional<SnapshotSetResult> CreateSnapshotW(const std::wstring& wVolumePath);
 	std::optional<SnapshotSetResult> CreateSnapshot(const std::string& volumePath);
 	//bool CreateSnapshotW(const std::vector<std::wstring>& wVolumePath);
 	bool DeleteSnapshotW(const std::wstring& wSnapshotID);
 	bool DeleteSnapshot(const std::string& snapshotID);
-	std::optional<VssSnapshotProperty> GetSnapshotProperty(const VSS_ID& snapshotID);
+	std::optional<VssSnapshotProperty> GetSnapshotPropertyW(const std::wstring& wSnapshotID);
+	std::optional<VssSnapshotProperty> GetSnapshotProperty(const std::string& snapshotID);
 private:
 	bool Init();
 	bool Connect();

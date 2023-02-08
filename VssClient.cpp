@@ -103,13 +103,44 @@ VssSnapshotProperty::VssSnapshotProperty(const VSS_SNAPSHOT_PROP& prop)
 	m_status = prop.m_eStatus;
 }
 
+std::wstring VssSnapshotProperty::SnapshotDeviceObjectW() { return m_wSnapshotDeviceObject; }
+std::wstring VssSnapshotProperty::OriginVolumeNameW() { return m_wOriginVolumeName; }
+std::wstring VssSnapshotProperty::OriginatingMachineW() { return m_wOriginatingMachine; }
+std::wstring VssSnapshotProperty::ServiceMachineW() { return m_wServiceMachine; }
+std::wstring VssSnapshotProperty::ExposedNameW() { return m_wExposedName; }
+std::wstring VssSnapshotProperty::ExposedPathW() { return m_wExposedPath; }
+
 // std::optional<std::wstring> VssClient::CreateSnapshotW(const std::vector<std::wstring>& wVolumePath)
 // {
 // 	// TODP
 // 	return false;
 // }
 
-std::optional<SnapshotSetResultW> VssClient::CreateSnapshotW(const std::wstring& wVolumePath)
+std::vector<std::string> SnapshotSetResult::SnapshotIDList() const
+{
+	std::vector<std::string> snapshotIDList;
+	for (const std::wstring& wSnapshotID: m_wSnapshotIDList) {
+		snapshotIDList.emplace_back(Utf16ToUtf8(wSnapshotID));
+	}
+	return snapshotIDList;
+}
+
+std::string SnapshotSetResult::SnapshotSetID() const
+{
+	return Utf16ToUtf8(m_wSnapshotSetID);
+}
+
+std::vector<std::wstring> SnapshotSetResult::SnapshotIDListW() const
+{
+	return m_wSnapshotIDList;
+}
+
+std::wstring SnapshotSetResult::SnapshotSetIDW() const
+{
+	return m_wSnapshotSetID;
+}
+
+std::optional<SnapshotSetResult> VssClient::CreateSnapshotW(const std::wstring& wVolumePath)
 {
 	// rc = m_pVssObject->GatherWriterMetadata(&m_async);
 	// CHECK_HR_RETURN_FALSE(rc, "GatherWriterMetadata");
@@ -151,25 +182,16 @@ std::optional<SnapshotSetResultW> VssClient::CreateSnapshotW(const std::wstring&
 		return std::nullopt;
 	}
 	
-	SnapshotSetResultW wResult;
-	wResult.wSnapshotIDList.emplace_back(wSnapshotIDStr.value());
-	wResult.wSnapshotSetID = wSnapshotSetIDStr.value();
-	return std::make_optional<SnapshotSetResultW>(wResult);
+	SnapshotSetResult result;
+	result.m_wSnapshotIDList.emplace_back(wSnapshotIDStr.value());
+	result.m_wSnapshotSetID = wSnapshotSetIDStr.value();
+	return std::make_optional<SnapshotSetResult>(result);
 }
 
 std::optional<SnapshotSetResult> VssClient::CreateSnapshot(const std::string& volumePath)
 {
 	std::wstring wVolumePath = Utf8ToUtf16(volumePath);
-	std::optional<SnapshotSetResultW> wResult = CreateSnapshotW(wVolumePath);
-	if (!wResult) {
-		return std::nullopt;
-	}
-	SnapshotSetResult result;
-	result.snapshotSetID = Utf16ToUtf8(wResult->wSnapshotSetID);
-	for (const std::wstring& wSnapshotID: wResult->wSnapshotIDList) {
-		result.snapshotIDList.emplace_back(Utf16ToUtf8(wSnapshotID));
-	}
-	return std::make_optional<SnapshotSetResult>(result);
+	return CreateSnapshotW(wVolumePath);
 }
 
 bool VssClient::DeleteSnapshotW(const std::wstring& wSnapshotID)
@@ -196,16 +218,26 @@ bool VssClient::DeleteSnapshot(const std::string& snapshotID)
 	return DeleteSnapshotW(wSnapshotID);
 }
 
-std::optional<VssSnapshotProperty> VssClient::GetSnapshotProperty(const VSS_ID& snapshotID)
+std::optional<VssSnapshotProperty> VssClient::GetSnapshotPropertyW(const std::wstring& wSnapshotIDStr)
 {
+	std::optional<VSS_ID> snapshotID = VssIDfromWStr(wSnapshotIDStr);
+	if (!snapshotID) {
+		return std::nullopt;
+	}
+
 	VSS_SNAPSHOT_PROP snapshotProp;
-	HRESULT rc = m_pVssObject->GetSnapshotProperties(snapshotID, &snapshotProp);
+	HRESULT rc = m_pVssObject->GetSnapshotProperties(snapshotID.value(), &snapshotProp);
 	CHECK_HR_RETURN(rc, "GetSnapshotProperties", std::nullopt);
 	VssSnapshotProperty property(snapshotProp);
 	::VssFreeSnapshotProperties(&snapshotProp);
 	return std::make_optional<VssSnapshotProperty>(property);
 }
 
+std::optional<VssSnapshotProperty> VssClient::GetSnapshotProperty(const std::string& snapshotIDStr)
+{
+	const std::wstring wSnapshotIDstr = Utf8ToUtf16(snapshotIDStr);
+	return GetSnapshotPropertyW(wSnapshotIDstr);
+}
 
 VssClient::VssClient()
 {

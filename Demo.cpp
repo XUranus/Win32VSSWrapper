@@ -19,16 +19,35 @@ void PrintHelp()
 	std::cout << "vssclient, manpulate VSS for windows" << std::endl;
 	std::cout << "Usage: " << std::endl;
 	std::cout << "vssclient list" << std::endl;
+	std::cout << "vssclient query <snapshotID>" << std::endl;
 	std::cout << "vssclient create <volumePath>" << std::endl;
 	std::cout << "vssclient delete <snapshotID>" << std::endl;
 }
 
-void DoListAllCommand()
+void DoCommandListAll()
 {
 	std::wcout << L"TODO listAllCommand" << std::endl;
 }
 
-int DoCreateCommand(const std::wstring& wPath)
+int DoCommandQuerySnapshot(const std::wstring& wSnapshotID)
+{
+	std::wcout << L"Query Snapshot ID " << wSnapshotID << std::endl;
+	VssClient vssClient;
+	std::optional<VssSnapshotProperty> property = vssClient.GetSnapshotPropertyW(wSnapshotID);
+	if (!property) {
+		std::wcout << L"Failed To Query Property" << std::endl;
+		return -1;
+	}
+	std::wcout << L"SnapshotDeviceObject: " << property->SnapshotDeviceObjectW() << std::endl;
+	std::wcout << L"OriginVolumeName: " << property->OriginVolumeNameW() << std::endl;
+	std::wcout << L"OriginatingMachine: " << property->OriginatingMachineW() << std::endl;
+	std::wcout << L"ServiceMachine: " << property->ServiceMachineW() << std::endl;
+	std::wcout << L"ExposedName: " << property->ExposedNameW() << std::endl;
+	std::wcout << L"ExposedPath: " << property->ExposedPathW() << std::endl;
+	return 0;
+}
+
+int DoCommandCreate(const std::wstring& wPath)
 {
 	std::wcout << L"create snapshot for " << wPath << std::endl;
 
@@ -41,22 +60,22 @@ int DoCreateCommand(const std::wstring& wPath)
 	std::wcout << L"The Volume Path Of " << wPath << L" Is " << wVolumePath << std::endl;
 	
 	VssClient vssClient;
-	std::optional<SnapshotSetResultW> result = vssClient.CreateSnapshotW(wVolumePath);
+	std::optional<SnapshotSetResult> result = vssClient.CreateSnapshotW(wVolumePath);
 	if (!result) {
 		std::wcout << L"Failed to Create Snapshot" << std::endl;
 		return -1;
 	} else {
 		std::wcout << L"Create Snapshot Success" << std::endl;
 	}
-	std::wcout << L"Shadow Set ID: " << result->wSnapshotSetID << std::endl;
+	std::wcout << L"Shadow Set ID: " << result->SnapshotSetIDW() << std::endl;
 	int index = 0;
-	for (const std::wstring& wSnapshotID: result->wSnapshotIDList) {
+	for (const std::wstring& wSnapshotID: result->SnapshotIDListW()) {
 		std::wcout << L"snapshot ID[" << ++index << L"]: " << wSnapshotID << std::endl;
 	}
 	return 0;
 }
 
-int DoDeleteSnapshot(const std::wstring& wSnapshotID)
+int DoCommandDeleteSnapshot(const std::wstring& wSnapshotID)
 {
 	VssClient vssClient;
 	bool success = vssClient.DeleteSnapshotW(wSnapshotID);
@@ -80,13 +99,15 @@ int wmain(int argc, WCHAR** argv)
 	}
 
 	for (int i = 1; i < argc; ++i) {
-		if (std::wstring(argv[i]) == L"list") {
-			return DoListAllCommand();
-		}
-		else if (std::wstring(argv[i]) == L"create" && i + 1 < argc) {
-			return DoCreateCommand(std::wstring(argv[i + 1]));
-		} else if (std::wstring(argv[i]) == L"delete" && i + 1 < argc) {
-			return DoDeleteSnapshot(std::wstring(argv[i + 1]));
+		const std::wstring wOption = std::wstring(argv[i]);
+		if (wOption == L"list") {
+			return DoCommandListAll();
+		} else if (wOption == L"query" && i + 1 < argc) {
+			return DoCommandQuerySnapshot(std::wstring(argv[i + 1]));
+		} else if (wOption == L"create" && i + 1 < argc) {
+			return DoCommandCreate(std::wstring(argv[i + 1]));
+		} else if (wOption == L"delete" && i + 1 < argc) {
+			return DoCommandDeleteSnapshot(std::wstring(argv[i + 1]));
 		} else {
 			std::wcout << L"Illegal Command" << std::endl;
 			PrintHelp();
