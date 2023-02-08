@@ -110,17 +110,24 @@ VssSnapshotProperty::VssSnapshotProperty(const VSS_SNAPSHOT_PROP& prop)
 		m_wExposedPath = prop.m_pwszExposedPath;
 	}
 	m_providerID = prop.m_ProviderId;
-	m_napshotAttributes = prop.m_lSnapshotAttributes;
+	m_snapshotAttributes = prop.m_lSnapshotAttributes;
 	m_createTime = prop.m_tsCreationTimestamp;
 	m_status = prop.m_eStatus;
 }
 
+std::wstring VssSnapshotProperty::SnapshotIDW() { return VssID2WStr(m_snapshotID).value(); }
+std::wstring VssSnapshotProperty::SnapshotSetIDW() { return VssID2WStr(m_shapshotSetID).value(); }
+uint64_t VssSnapshotProperty::SnapshotsCount() { return m_snapshotsCount; }
 std::wstring VssSnapshotProperty::SnapshotDeviceObjectW() { return m_wSnapshotDeviceObject; }
 std::wstring VssSnapshotProperty::OriginVolumeNameW() { return m_wOriginVolumeName; }
 std::wstring VssSnapshotProperty::OriginatingMachineW() { return m_wOriginatingMachine; }
 std::wstring VssSnapshotProperty::ServiceMachineW() { return m_wServiceMachine; }
 std::wstring VssSnapshotProperty::ExposedNameW() { return m_wExposedName; }
 std::wstring VssSnapshotProperty::ExposedPathW() { return m_wExposedPath; }
+std::wstring VssSnapshotProperty::ProviderIDW() { return VssID2WStr(m_providerID).value(); }
+uint64_t VssSnapshotProperty::SnapshotAttributes() { return m_snapshotAttributes; }
+uint64_t VssSnapshotProperty::CreateTime() { return m_createTime; }
+VSS_SNAPSHOT_STATE VssSnapshotProperty::Status() { return m_status; }
 
 // std::optional<std::wstring> VssClient::CreateSnapshotW(const std::vector<std::wstring>& wVolumePath)
 // {
@@ -279,7 +286,7 @@ bool VssClient::Connect()
 	CHECK_HR_RETURN_FALSE(hr, "SetContext");
 
 	hr = m_pVssObject->SetBackupState(true, false, VSS_BT_FULL, false);
-	CHECK_HR_RETURN_FALSE(hr, "SetBackupState", std::nullopt);
+	CHECK_HR_RETURN_FALSE(hr, "SetBackupState");
 
 	return true;
 }

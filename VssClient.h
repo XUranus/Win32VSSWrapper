@@ -22,8 +22,8 @@ class VssSnapshotProperty {
 public:
 	VssSnapshotProperty(const VSS_SNAPSHOT_PROP &prop);
 
-	VSS_ID SnapshotID();
-	VSS_ID SnapshotSetID();
+	std::wstring SnapshotIDW();
+	std::wstring SnapshotSetIDW();
 	uint64_t SnapshotsCount();
 	std::wstring SnapshotDeviceObjectW();
 	std::wstring OriginVolumeNameW();
@@ -31,11 +31,15 @@ public:
 	std::wstring ServiceMachineW();
 	std::wstring ExposedNameW();
 	std::wstring ExposedPathW();
-	VSS_ID ProviderID();
+	std::wstring ProviderIDW();
 	uint64_t SnapshotAttributes();
 	uint64_t CreateTime();
 	VSS_SNAPSHOT_STATE Status();
 
+	/* API for UTF-8 */
+	std::string SnapshotID();
+	std::string SnapshotSetID();
+	std::string ProviderID();
 	std::string SnapshotDeviceObject();
 	std::string OriginVolumeName();
 	std::string OriginatingMachine();
@@ -53,7 +57,7 @@ private:
 	std::wstring m_wExposedName;
 	std::wstring m_wExposedPath;
 	VSS_ID m_providerID;
-	uint64_t m_napshotAttributes;
+	uint64_t m_snapshotAttributes;
 	uint64_t m_createTime;
 	VSS_SNAPSHOT_STATE m_status;
 };

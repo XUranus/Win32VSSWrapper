@@ -38,12 +38,19 @@ int DoCommandQuerySnapshot(const std::wstring& wSnapshotID)
 		std::wcout << L"Failed To Query Property" << std::endl;
 		return -1;
 	}
+	std::wcout << L"SnapshotID: " << property->SnapshotIDW() << std::endl;
+	std::wcout << L"SnapshotSetID: " << property->SnapshotSetIDW() << std::endl;
+	std::wcout << L"SnapshotsCount: " << property->SnapshotsCount() << std::endl;
 	std::wcout << L"SnapshotDeviceObject: " << property->SnapshotDeviceObjectW() << std::endl;
 	std::wcout << L"OriginVolumeName: " << property->OriginVolumeNameW() << std::endl;
 	std::wcout << L"OriginatingMachine: " << property->OriginatingMachineW() << std::endl;
 	std::wcout << L"ServiceMachine: " << property->ServiceMachineW() << std::endl;
 	std::wcout << L"ExposedName: " << property->ExposedNameW() << std::endl;
 	std::wcout << L"ExposedPath: " << property->ExposedPathW() << std::endl;
+	std::wcout << L"ProviderID: " << property->ProviderIDW() << std::endl;
+	std::wcout << L"SnapshotAttributes: " << property->SnapshotAttributes() << std::endl;
+	std::wcout << L"CreateTime: " << property->CreateTime() << std::endl;
+	std::wcout << L"Status: " << property->Status() << std::endl;
 	return 0;
 }
 
