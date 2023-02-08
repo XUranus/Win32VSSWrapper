@@ -20,13 +20,12 @@ constexpr auto VSS_ID_MAX_LEN = 100;
 std::optional<std::wstring> VssID2WStr(const VSS_ID& vssID)
 {
 	LPOLESTR wVssIDBuf = nullptr;
+	CAutoComPointer ptrAutoCleanUp(wVssIDBuf);
 	HRESULT hr = ::StringFromIID(vssID, &wVssIDBuf);
 	if (FAILED(hr)) {
 		return std::nullopt;
 	}
 	std::wstring wVssIDStr(wVssIDBuf);
-	::CoTaskMemFree(wVssIDBuf);
-	wVssIDBuf = nullptr;
 	return std::make_optional<std::wstring>(wVssIDStr);
 }
 
@@ -115,19 +114,122 @@ VssSnapshotProperty::VssSnapshotProperty(const VSS_SNAPSHOT_PROP& prop)
 	m_status = prop.m_eStatus;
 }
 
-std::wstring VssSnapshotProperty::SnapshotIDW() { return VssID2WStr(m_snapshotID).value(); }
-std::wstring VssSnapshotProperty::SnapshotSetIDW() { return VssID2WStr(m_shapshotSetID).value(); }
-uint64_t VssSnapshotProperty::SnapshotsCount() { return m_snapshotsCount; }
-std::wstring VssSnapshotProperty::SnapshotDeviceObjectW() { return m_wSnapshotDeviceObject; }
-std::wstring VssSnapshotProperty::OriginVolumeNameW() { return m_wOriginVolumeName; }
-std::wstring VssSnapshotProperty::OriginatingMachineW() { return m_wOriginatingMachine; }
-std::wstring VssSnapshotProperty::ServiceMachineW() { return m_wServiceMachine; }
-std::wstring VssSnapshotProperty::ExposedNameW() { return m_wExposedName; }
-std::wstring VssSnapshotProperty::ExposedPathW() { return m_wExposedPath; }
-std::wstring VssSnapshotProperty::ProviderIDW() { return VssID2WStr(m_providerID).value(); }
-uint64_t VssSnapshotProperty::SnapshotAttributes() { return m_snapshotAttributes; }
-uint64_t VssSnapshotProperty::CreateTime() { return m_createTime; }
-VSS_SNAPSHOT_STATE VssSnapshotProperty::Status() { return m_status; }
+uint64_t VssSnapshotProperty::SnapshotsCount() const 
+{
+	return m_snapshotsCount;
+}
+
+uint64_t VssSnapshotProperty::SnapshotAttributes()const
+{
+	return m_snapshotAttributes;
+}
+
+uint64_t VssSnapshotProperty::CreateTime() const
+{
+	return m_createTime;
+}
+
+VSS_SNAPSHOT_STATE VssSnapshotProperty::Status() const
+{
+	return m_status;
+}
+
+bool VssSnapshotProperty::ClientAccessible() const
+{
+	return (m_snapshotAttributes & VSS_VOLSNAP_ATTR_CLIENT_ACCESSIBLE) != 0;
+}
+
+/* VssSnapshotProperty API for UTF-16 */
+std::wstring VssSnapshotProperty::SnapshotIDW() const
+{
+	return VssID2WStr(m_snapshotID).value();
+}
+
+std::wstring VssSnapshotProperty::SnapshotSetIDW() const
+{
+	return VssID2WStr(m_shapshotSetID).value();
+}
+
+std::wstring VssSnapshotProperty::SnapshotDeviceObjectW() const
+{
+	return m_wSnapshotDeviceObject;
+}
+
+std::wstring VssSnapshotProperty::OriginVolumeNameW() const
+{
+	return m_wOriginVolumeName;
+}
+
+std::wstring VssSnapshotProperty::OriginatingMachineW() const
+{
+	return m_wOriginatingMachine;
+}
+
+std::wstring VssSnapshotProperty::ServiceMachineW() const
+{
+	return m_wServiceMachine;
+}
+
+std::wstring VssSnapshotProperty::ExposedNameW() const
+{
+	return m_wExposedName;
+}
+
+std::wstring VssSnapshotProperty::ExposedPathW() const
+{
+	return m_wExposedPath;
+}
+
+std::wstring VssSnapshotProperty::ProviderIDW() const
+{
+	return VssID2WStr(m_providerID).value();
+}
+
+/* VssSnapshotProperty API for UTF-8 */
+std::string VssSnapshotProperty::SnapshotID() const
+{
+	return Utf16ToUtf8(SnapshotIDW());
+}
+
+std::string VssSnapshotProperty::SnapshotSetID() const
+{
+	return Utf16ToUtf8(SnapshotSetIDW());
+}
+
+std::string VssSnapshotProperty::ProviderID() const
+{
+	return Utf16ToUtf8(ProviderIDW());
+}
+
+std::string VssSnapshotProperty::SnapshotDeviceObject() const
+{
+	return Utf16ToUtf8(SnapshotDeviceObjectW());
+}
+
+std::string VssSnapshotProperty::OriginVolumeName() const
+{
+	return Utf16ToUtf8(OriginVolumeNameW());
+}
+
+std::string VssSnapshotProperty::OriginatingMachine() const
+{
+	return Utf16ToUtf8(OriginatingMachineW());
+}
+
+std::string VssSnapshotProperty::ServiceMachine() const
+{
+	return Utf16ToUtf8(ServiceMachineW());
+}
+
+std::string VssSnapshotProperty::ExposedName() const
+{
+	return Utf16ToUtf8(ExposedNameW());
+}
+
+std::string VssSnapshotProperty::ExposedPath() const
+{
+	return Utf16ToUtf8(ExposedPathW());
+}
 
 // std::optional<std::wstring> VssClient::CreateSnapshotW(const std::vector<std::wstring>& wVolumePath)
 // {
@@ -254,9 +356,39 @@ std::optional<VssSnapshotProperty> VssClient::GetSnapshotProperty(const std::str
 	return GetSnapshotPropertyW(wSnapshotIDstr);
 }
 
+bool VssClient::ExposeSnapshotLocallyW(const std::wstring& wSnapshotID, const std::wstring& wPath)
+{
+	std::optional<VssSnapshotProperty> property = GetSnapshotPropertyW(wSnapshotID);
+	/* invalid snapshot ID */
+	if (!property) {
+		return false;
+	}
+	/* client accessible snapshot cannot be exposed locally */
+	if (property->ClientAccessible() ||
+		!property->ExposedNameW().empty() ||
+		!property->ExposedPathW().empty()) {
+		return false;
+	}
+	std::wstring wMountPath = wPath; /* final mount path */
+	if (!wMountPath.empty() && wMountPath.back() != L'\\') {
+		wMountPath.push_back(L'\\');
+	}
+	LPWSTR pwszExposed = nullptr;
+	VSS_ID vssID = VssIDfromWStr(wSnapshotID).value();
+    HRESULT hr = m_pVssObject->ExposeSnapshot(vssID,nullptr,VSS_VOLSNAP_ATTR_EXPOSED_LOCALLY, (VSS_PWSZ)wMountPath.c_str(), &pwszExposed);
+	CHECK_HR_RETURN(hr, "ExposeSnapshot", false);
+	
+	return true;
+}
+
+bool VssClient::ExposeSnapshotLocally(const std::string& snapshotID, const std::string& path)
+{
+	return ExposeSnapshotLocallyW(Utf8ToUtf16(snapshotID), Utf8ToUtf16(path));
+}
+
 VssClient::VssClient()
 {
-	Init();
+	InitializeCom();
 	Connect();
 }
 
@@ -266,11 +398,23 @@ VssClient::~VssClient()
 }
 
 /* initialzie COM */
-bool VssClient::Init()
+bool VssClient::InitializeCom()
 {
 	HRESULT hr = ::CoInitializeEx(nullptr, COINIT::COINIT_MULTITHREADED);
-    CHECK_HR_RETURN_FALSE(hr, "CoInitialize");
+    CHECK_HR_RETURN_FALSE(hr, "CoInitializeEx");
 	m_comInitialized = true;
+	hr = CoInitializeSecurity(
+            NULL,                           //  Allow *all* VSS writers to communicate back!
+            -1,                             //  Default COM authentication service
+            NULL,                           //  Default COM authorization service
+            NULL,                           //  reserved parameter
+            RPC_C_AUTHN_LEVEL_PKT_PRIVACY,  //  Strongest COM authentication level
+            RPC_C_IMP_LEVEL_IMPERSONATE,    //  Minimal impersonation abilities 
+            NULL,                           //  Default COM authentication settings
+            EOAC_DYNAMIC_CLOAKING,          //  Cloaking
+            NULL                            //  Reserved parameter
+        );
+	CHECK_HR_RETURN_FALSE(hr, "CoInitializeSecurity");
 	return true;
 }
 
@@ -282,7 +426,7 @@ bool VssClient::Connect()
 	hr = m_pVssObject->InitializeForBackup();
 	CHECK_HR_RETURN_FALSE(hr, "InitializeForBackup");
 
-	hr = m_pVssObject->SetContext(VSS_CTX_BACKUP);
+	hr = m_pVssObject->SetContext(VSS_CTX_APP_ROLLBACK);
 	CHECK_HR_RETURN_FALSE(hr, "SetContext");
 
 	hr = m_pVssObject->SetBackupState(true, false, VSS_BT_FULL, false);

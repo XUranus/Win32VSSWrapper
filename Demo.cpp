@@ -22,6 +22,7 @@ void PrintHelp()
 	std::cout << "vssclient query <snapshotID>" << std::endl;
 	std::cout << "vssclient create <volumePath>" << std::endl;
 	std::cout << "vssclient delete <snapshotID>" << std::endl;
+	std::cout << "vssclient mount <snapshotID> <path>" << std::endl;
 }
 
 void DoCommandListAll()
@@ -96,6 +97,20 @@ int DoCommandDeleteSnapshot(const std::wstring& wSnapshotID)
 	return 0;
 }
 
+int DoCommandMountSnapshot(const std::wstring& wSnapshotID, const std::wstring& wPath)
+{
+	VssClient vssClient;
+	bool success = vssClient.ExposeSnapshotLocallyW(wSnapshotID, wPath);
+	if (success) {
+		std::wcout << L"Mount Success" << std::endl;
+		return 0;
+	} else {
+		std::wcout << L"Mount Failed" << std::endl;
+		return -1;
+	}
+	return 0;
+}
+
 int wmain(int argc, WCHAR** argv)
 {
 	::SetConsoleOutputCP(65001); // forcing cmd to use UTF-8 output encoding
@@ -115,6 +130,8 @@ int wmain(int argc, WCHAR** argv)
 			return DoCommandCreate(std::wstring(argv[i + 1]));
 		} else if (wOption == L"delete" && i + 1 < argc) {
 			return DoCommandDeleteSnapshot(std::wstring(argv[i + 1]));
+		} else if (wOption == L"mount" && i + 2 < argc) {
+			return DoCommandMountSnapshot(std::wstring(argv[i + 1]), std::wstring(argv[i + 2]));
 		} else {
 			std::wcout << L"Illegal Command" << std::endl;
 			PrintHelp();
