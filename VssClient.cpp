@@ -91,12 +91,24 @@ VssSnapshotProperty::VssSnapshotProperty(const VSS_SNAPSHOT_PROP& prop)
 	m_snapshotID = prop.m_SnapshotId;
 	m_shapshotSetID = prop.m_SnapshotSetId;
 	m_snapshotsCount = prop.m_lSnapshotsCount;
-	m_wSnapshotDeviceObject = prop.m_pwszSnapshotDeviceObject;
-	m_wOriginVolumeName = prop.m_pwszOriginalVolumeName;
-	m_wOriginatingMachine = prop.m_pwszOriginatingMachine;
-	m_wServiceMachine = prop.m_pwszServiceMachine;
-	m_wExposedName = prop.m_pwszExposedName;
-	m_wExposedName = prop.m_pwszExposedPath;
+	if (prop.m_pwszSnapshotDeviceObject) {
+		m_wSnapshotDeviceObject = prop.m_pwszSnapshotDeviceObject;
+	}
+	if (prop.m_pwszOriginalVolumeName) {
+		m_wOriginVolumeName = prop.m_pwszOriginalVolumeName;
+	}
+	if (prop.m_pwszOriginatingMachine) {
+		m_wOriginatingMachine = prop.m_pwszOriginatingMachine;
+	}
+	if (prop.m_pwszServiceMachine) {
+		m_wServiceMachine = prop.m_pwszServiceMachine;
+	}
+	if (prop.m_pwszExposedName) {
+		m_wExposedName = prop.m_pwszExposedName;
+	}
+	if (prop.m_pwszExposedPath) {
+		m_wExposedPath = prop.m_pwszExposedPath;
+	}
 	m_providerID = prop.m_ProviderId;
 	m_napshotAttributes = prop.m_lSnapshotAttributes;
 	m_createTime = prop.m_tsCreationTimestamp;
@@ -142,36 +154,32 @@ std::wstring SnapshotSetResult::SnapshotSetIDW() const
 
 std::optional<SnapshotSetResult> VssClient::CreateSnapshotW(const std::wstring& wVolumePath)
 {
-	// rc = m_pVssObject->GatherWriterMetadata(&m_async);
-	// CHECK_HR_RETURN_FALSE(rc, "GatherWriterMetadata");
-	// rc = m_async->Wait();
-	// CHECK_HR_RETURN_FALSE(rc, "m_async->Wait");
+	// hr = m_pVssObject->GatherWriterMetadata(&m_async);
+	// CHECK_HR_RETURN_FALSE(hr, "GatherWriterMetadata");
+	// hr = m_async->Wait();
+	// CHECK_HR_RETURN_FALSE(hr, "m_async->Wait");
 
 	VSS_ID snapshotSetID;
-	HRESULT rc = m_pVssObject->StartSnapshotSet(&snapshotSetID);
-	CHECK_HR_RETURN(rc, "StartSnapshotSet", std::nullopt);
+	HRESULT hr = m_pVssObject->StartSnapshotSet(&snapshotSetID);
+	CHECK_HR_RETURN(hr, "StartSnapshotSet", std::nullopt);
 
 	VSS_ID snapshotID;
 	WCHAR volume[MAX_PATH] = { L'\0' };
 	wcscpy_s(volume, MAX_PATH, wVolumePath.c_str());
-	rc = m_pVssObject->AddToSnapshotSet(volume, GUID_NULL, &snapshotID);
-    CHECK_HR_RETURN(rc, "AddToSnapshotSet", std::nullopt);
-
-	/* Generate Snapshot */ // TODO: move to init
-	rc = m_pVssObject->SetBackupState(true, false, VSS_BT_FULL, false);
-	CHECK_HR_RETURN(rc, "SetBackupState", std::nullopt);
+	hr = m_pVssObject->AddToSnapshotSet(volume, GUID_NULL, &snapshotID);
+    CHECK_HR_RETURN(hr, "AddToSnapshotSet", std::nullopt);
 
 	CComPtr<IVssAsync> pAsync;
-	rc = m_pVssObject->PrepareForBackup(&pAsync);
-	CHECK_HR_RETURN(rc, "PrepareForBackup", std::nullopt);
+	hr = m_pVssObject->PrepareForBackup(&pAsync);
+	CHECK_HR_RETURN(hr, "PrepareForBackup", std::nullopt);
 	CHECK_BOOL_RETURN(WaitAndCheckForAsyncOperation(pAsync), "pAsync1->Wait", std::nullopt);
 
-	rc = m_pVssObject->DoSnapshotSet(&pAsync);
-	CHECK_HR_RETURN(rc, "DoSnapshotSet", std::nullopt);
+	hr = m_pVssObject->DoSnapshotSet(&pAsync);
+	CHECK_HR_RETURN(hr, "DoSnapshotSet", std::nullopt);
 	CHECK_BOOL_RETURN(WaitAndCheckForAsyncOperation(pAsync), "pAsync2->Wait", std::nullopt);
 
-	//rc = m_pVssObject->BackupComplete(&pAsync);
-	//CHECK_HR_RETURN(rc, "BackupComplete", std::nullopt); // TODO:: try to figure out why crashed
+	//hr = m_pVssObject->BackupComplete(&pAsync);
+	//CHECK_HR_RETURN(hr, "BackupComplete", std::nullopt); // TODO:: try to figure out why crashed
 	//CHECK_BOOL_RETURN(WaitAndCheckForAsyncOperation(pAsync), "pAsync3->Wait", std::nullopt);
 	//std::cout << "bp3" << std::endl;
 
@@ -226,8 +234,8 @@ std::optional<VssSnapshotProperty> VssClient::GetSnapshotPropertyW(const std::ws
 	}
 
 	VSS_SNAPSHOT_PROP snapshotProp;
-	HRESULT rc = m_pVssObject->GetSnapshotProperties(snapshotID.value(), &snapshotProp);
-	CHECK_HR_RETURN(rc, "GetSnapshotProperties", std::nullopt);
+	HRESULT hr = m_pVssObject->GetSnapshotProperties(snapshotID.value(), &snapshotProp);
+	CHECK_HR_RETURN(hr, "GetSnapshotProperties", std::nullopt);
 	VssSnapshotProperty property(snapshotProp);
 	::VssFreeSnapshotProperties(&snapshotProp);
 	return std::make_optional<VssSnapshotProperty>(property);
@@ -253,35 +261,38 @@ VssClient::~VssClient()
 /* initialzie COM */
 bool VssClient::Init()
 {
-	HRESULT rc = ::CoInitializeEx(nullptr, COINIT::COINIT_MULTITHREADED);
-    CHECK_HR_RETURN_FALSE(rc, "CoInitialize");
+	HRESULT hr = ::CoInitializeEx(nullptr, COINIT::COINIT_MULTITHREADED);
+    CHECK_HR_RETURN_FALSE(hr, "CoInitialize");
 	m_comInitialized = true;
 	return true;
 }
 
 bool VssClient::Connect()
 {
-	HRESULT rc = ::CreateVssBackupComponents(&m_pVssObject);
-	CHECK_HR_RETURN_FALSE(rc, "CreateVssBackupComponents");
+	HRESULT hr = ::CreateVssBackupComponents(&m_pVssObject);
+	CHECK_HR_RETURN_FALSE(hr, "CreateVssBackupComponents");
 
-	rc = m_pVssObject->InitializeForBackup();
-	CHECK_HR_RETURN_FALSE(rc, "InitializeForBackup");
+	hr = m_pVssObject->InitializeForBackup();
+	CHECK_HR_RETURN_FALSE(hr, "InitializeForBackup");
 
-	rc = m_pVssObject->SetContext(VSS_CTX_BACKUP);
-	CHECK_HR_RETURN_FALSE(rc, "SetContext");
+	hr = m_pVssObject->SetContext(VSS_CTX_BACKUP);
+	CHECK_HR_RETURN_FALSE(hr, "SetContext");
+
+	hr = m_pVssObject->SetBackupState(true, false, VSS_BT_FULL, false);
+	CHECK_HR_RETURN_FALSE(hr, "SetBackupState", std::nullopt);
 
 	return true;
 }
 
 bool VssClient::WaitAndCheckForAsyncOperation(IVssAsync* pAsync)
 {
-    HRESULT rc = pAsync->Wait();
-	CHECK_HR_RETURN_FALSE(rc, "WaitAndCheckForAsyncOperation pAsync->Wait");
+    HRESULT hr = pAsync->Wait();
+	CHECK_HR_RETURN_FALSE(hr, "WaitAndCheckForAsyncOperation pAsync->Wait");
 
     /* Check the result of the asynchronous operation */
     HRESULT hrReturned = S_OK;
-    rc = pAsync->QueryStatus(&hrReturned, nullptr);
-	CHECK_HR_RETURN_FALSE(rc, "WaitAndCheckForAsyncOperation pAsync->QueryStatus");
+    hr = pAsync->QueryStatus(&hrReturned, nullptr);
+	CHECK_HR_RETURN_FALSE(hr, "WaitAndCheckForAsyncOperation pAsync->QueryStatus");
 
     /* Check if the async operation succeeded... */
     CHECK_HR_RETURN_FALSE(hrReturned, "WaitAndCheckForAsyncOperation return false");
