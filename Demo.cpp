@@ -5,6 +5,7 @@
 #include <fstream>
 #include <chrono>
 #include <ctime>
+#include <set>
 #include "VssClient.h"
 #define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
@@ -20,7 +21,7 @@ void PrintHelp()
 	std::cout << "Usage: " << std::endl;
 	std::cout << "vssclient list" << std::endl;
 	std::cout << "vssclient query <snapshotID>" << std::endl;
-	std::cout << "vssclient create <volumePath>" << std::endl;
+	std::cout << "vssclient create <volumePath1> <volumePath2> ..." << std::endl;
 	std::cout << "vssclient delete <snapshotID>" << std::endl;
 	std::cout << "vssclient mount <snapshotID> <path>" << std::endl;
 }
@@ -55,25 +56,37 @@ int DoCommandQuerySnapshot(const std::wstring& wSnapshotID)
 	return 0;
 }
 
-int DoCommandCreate(const std::wstring& wPath)
+int DoCommandCreate(const std::vector<std::wstring>& wPathList)
 {
-	std::wcout << L"create snapshot for " << wPath << std::endl;
+	std::set<std::wstring> wVolumePathSet;
+	for (const std::wstring& wPath: wPathList) {
+		WCHAR wVolumePathBuf[MAX_PATH + 1] = { L'\0' };
+		if (::GetVolumePathNameW(wPath.c_str(), wVolumePathBuf, MAX_PATH) == FALSE) {
+			std::wcout << L"Failed To Get Volume Path For " << wPath << std::endl;
+			return -1;
+		}
+		std::wstring wVolumePath(wVolumePathBuf);
+		std::wcout << L"The Volume Path Of " << wPath << L" Is " << wVolumePath << std::endl;
+		wVolumePathSet.insert(wVolumePath);
+	}
 
-	WCHAR wVolumePathBuf[MAX_PATH + 1] = { L'\0' };
-    if (::GetVolumePathNameW(wPath.c_str(), wVolumePathBuf, MAX_PATH) == FALSE) {
-        std::wcout << L"Failed To Get Volume Path For " << wPath << std::endl;
-        return -1;
-    }
-	std::wstring wVolumePath(wVolumePathBuf);
-	std::wcout << L"The Volume Path Of " << wPath << L" Is " << wVolumePath << std::endl;
+	std::wcout << L"===== Begin To Create Snapshots =====" << std::endl;
+	std::vector<std::wstring> wVolumePathList(wVolumePathSet.begin(), wVolumePathSet.end());
+	for (const std::wstring& wVolumePath: wVolumePathList) {
+		std::wcout << L"create snapshot for " << wVolumePath << std::endl;
+	}
+	if (wVolumePathList.empty()) {
+		std::wcout << L"Volume Path List Is Empty" << std::endl;
+		return -1;
+	}
 	
 	VssClient vssClient;
-	std::optional<SnapshotSetResult> result = vssClient.CreateSnapshotW(wVolumePath);
+	std::optional<SnapshotSetResult> result = vssClient.CreateSnapshotsW(wVolumePathList);
 	if (!result) {
-		std::wcout << L"Failed to Create Snapshot" << std::endl;
+		std::wcout << L"Failed to Create Snapshots" << std::endl;
 		return -1;
 	} else {
-		std::wcout << L"Create Snapshot Success" << std::endl;
+		std::wcout << L"Create Snapshots Success" << std::endl;
 	}
 	std::wcout << L"Shadow Set ID: " << result->SnapshotSetIDW() << std::endl;
 	int index = 0;
@@ -127,7 +140,11 @@ int wmain(int argc, WCHAR** argv)
 		} else if (wOption == L"query" && i + 1 < argc) {
 			return DoCommandQuerySnapshot(std::wstring(argv[i + 1]));
 		} else if (wOption == L"create" && i + 1 < argc) {
-			return DoCommandCreate(std::wstring(argv[i + 1]));
+			std::vector<std::wstring> wPathList;
+			for (int j = i + 1; j < argc; j++) {
+				wPathList.emplace_back(std::wstring(argv[j]));
+			}
+			return DoCommandCreate(wPathList);
 		} else if (wOption == L"delete" && i + 1 < argc) {
 			return DoCommandDeleteSnapshot(std::wstring(argv[i + 1]));
 		} else if (wOption == L"mount" && i + 2 < argc) {

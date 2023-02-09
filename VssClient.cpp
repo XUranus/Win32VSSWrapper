@@ -231,12 +231,6 @@ std::string VssSnapshotProperty::ExposedPath() const
 	return Utf16ToUtf8(ExposedPathW());
 }
 
-// std::optional<std::wstring> VssClient::CreateSnapshotW(const std::vector<std::wstring>& wVolumePath)
-// {
-// 	// TODP
-// 	return false;
-// }
-
 std::vector<std::string> SnapshotSetResult::SnapshotIDList() const
 {
 	std::vector<std::string> snapshotIDList;
@@ -261,52 +255,39 @@ std::wstring SnapshotSetResult::SnapshotSetIDW() const
 	return m_wSnapshotSetID;
 }
 
-std::optional<SnapshotSetResult> VssClient::CreateSnapshotW(const std::wstring& wVolumePath)
+std::optional<SnapshotSetResult> VssClient::CreateSnapshotsW(const std::vector<std::wstring>& wVolumePathList)
 {
+	SnapshotSetResult result;
 	/* no need to call GatherWriterMetadata due to no writers involved */
-
 	VSS_ID snapshotSetID;
 	HRESULT hr = m_pVssObject->StartSnapshotSet(&snapshotSetID);
 	CHECK_HR_RETURN(hr, "StartSnapshotSet", std::nullopt);
 
-	VSS_ID snapshotID;
-	WCHAR volume[MAX_PATH] = { L'\0' };
-	wcscpy_s(volume, MAX_PATH, wVolumePath.c_str());
-	hr = m_pVssObject->AddToSnapshotSet(volume, GUID_NULL, &snapshotID);
-    CHECK_HR_RETURN(hr, "AddToSnapshotSet", std::nullopt);
+	result.m_wSnapshotSetID = VssID2WStr(snapshotSetID).value();
 
-	{
-		CComPtr<IVssAsync> pAsync;
-		hr = m_pVssObject->PrepareForBackup(&pAsync);
-		CHECK_HR_RETURN(hr, "PrepareForBackup", std::nullopt);
-		CHECK_BOOL_RETURN(WaitAndCheckForAsyncOperation(pAsync), "pAsync1->Wait", std::nullopt);
+	for (const std::wstring& wVolumePath: wVolumePathList) {
+		VSS_ID snapshotID;
+		WCHAR volume[MAX_PATH] = { L'\0' };
+		wcscpy_s(volume, MAX_PATH, wVolumePath.c_str());
+		hr = m_pVssObject->AddToSnapshotSet(volume, GUID_NULL, &snapshotID);
+		CHECK_HR_RETURN(hr, "AddToSnapshotSet", std::nullopt);
+		result.m_wSnapshotIDList.emplace_back(VssID2WStr(snapshotID).value());
 	}
-	{
-		CComPtr<IVssAsync> pAsync;
-		hr = m_pVssObject->DoSnapshotSet(&pAsync);
-		CHECK_HR_RETURN(hr, "DoSnapshotSet", std::nullopt);
-		CHECK_BOOL_RETURN(WaitAndCheckForAsyncOperation(pAsync), "pAsync2->Wait", std::nullopt);
-	}
+
+	CHECK_BOOL_RETURN(PrepareForBackupSync(), "PrepareForBackupSync", std::nullopt);
+	CHECK_BOOL_RETURN(DoSnapshotSetSync(), "DoSnapshotSetSync", std::nullopt);
 
 	/* no need to call BackupComplete due to no writers involved */
-
-	std::optional<std::wstring> wSnapshotSetIDStr = VssID2WStr(snapshotSetID);
-	std::optional<std::wstring> wSnapshotIDStr = VssID2WStr(snapshotID);
-	if (!wSnapshotIDStr || !wSnapshotSetIDStr) {
-		// TODO:: fatal error, try throw exception
-		return std::nullopt;
-	}
-	
-	SnapshotSetResult result;
-	result.m_wSnapshotIDList.emplace_back(wSnapshotIDStr.value());
-	result.m_wSnapshotSetID = wSnapshotSetIDStr.value();
 	return std::make_optional<SnapshotSetResult>(result);
 }
 
-std::optional<SnapshotSetResult> VssClient::CreateSnapshot(const std::string& volumePath)
+std::optional<SnapshotSetResult> VssClient::CreateSnapshots(const std::vector<std::string>& volumePathList)
 {
-	std::wstring wVolumePath = Utf8ToUtf16(volumePath);
-	return CreateSnapshotW(wVolumePath);
+	std::vector<std::wstring> wVolumePathList;
+	for (const std::string& volumePath: volumePathList) {
+		wVolumePathList.emplace_back(Utf8ToUtf16(volumePath));
+	}
+	return CreateSnapshotsW(wVolumePathList);
 }
 
 bool VssClient::DeleteSnapshotW(const std::wstring& wSnapshotID)
@@ -446,6 +427,24 @@ bool VssClient::WaitAndCheckForAsyncOperation(IVssAsync* pAsync)
     /* Check if the async operation succeeded... */
     CHECK_HR_RETURN_FALSE(hrReturned, "WaitAndCheckForAsyncOperation return false");
 
+	return true;
+}
+
+bool VssClient::PrepareForBackupSync()
+{
+	CComPtr<IVssAsync> pAsync;
+	HRESULT hr = m_pVssObject->PrepareForBackup(&pAsync);
+	CHECK_HR_RETURN(hr, "PrepareForBackup", false);
+	CHECK_BOOL_RETURN(WaitAndCheckForAsyncOperation(pAsync), "PrepareForBackup Wait", false);
+	return true;
+}
+
+bool VssClient::DoSnapshotSetSync()
+{
+	CComPtr<IVssAsync> pAsync;
+	HRESULT hr = m_pVssObject->DoSnapshotSet(&pAsync);
+	CHECK_HR_RETURN(hr, "DoSnapshotSet", false);
+	CHECK_BOOL_RETURN(WaitAndCheckForAsyncOperation(pAsync), "DoSnapshotSet Wait", false);
 	return true;
 }
 

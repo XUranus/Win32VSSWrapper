@@ -80,9 +80,8 @@ class VssClient {
 public:
 	VssClient();
 	~VssClient();
-	std::optional<SnapshotSetResult> CreateSnapshotW(const std::wstring& wVolumePath);
-	std::optional<SnapshotSetResult> CreateSnapshot(const std::string& volumePath);
-	//bool CreateSnapshotW(const std::vector<std::wstring>& wVolumePath);
+	std::optional<SnapshotSetResult> CreateSnapshots(const std::vector<std::string>& volumePathList);
+	std::optional<SnapshotSetResult> CreateSnapshotsW(const std::vector<std::wstring>& wVolumePathList);
 	bool DeleteSnapshotW(const std::wstring& wSnapshotID);
 	bool DeleteSnapshot(const std::string& snapshotID);
 	std::optional<VssSnapshotProperty> GetSnapshotPropertyW(const std::wstring& wSnapshotID);
@@ -93,6 +92,8 @@ private:
 	bool InitializeCom(); /* register this thread to Win32 COM */
 	bool Connect(); /* connect to Volume Shadows Service */
 	bool WaitAndCheckForAsyncOperation(IVssAsync* pAsync);
+	bool PrepareForBackupSync();
+	bool DoSnapshotSetSync();
 	void ReleaseResources();
 private:
 	bool m_comInitialized = false;
