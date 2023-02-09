@@ -22,11 +22,22 @@ class VssSnapshotProperty {
 public:
 	VssSnapshotProperty(const VSS_SNAPSHOT_PROP &prop);
 
-	uint64_t SnapshotAttributes() const;
 	uint64_t CreateTime() const;
 	VSS_SNAPSHOT_STATE Status() const;
 	uint64_t SnapshotsCount() const;
-	bool ClientAccessible() const;
+
+	uint64_t SnapshotAttributes() const;
+	bool IsClientAccessible() const;
+	bool IsExposedLocally() const;
+	bool IsExposedRemotely() const;
+	bool IsTransportable() const;
+	bool IsNoAutoRelease() const;
+	bool IsPersistent() const;
+	bool IsHardwareAssisted() const;
+	bool IsNoWriters() const;
+	bool IsImported() const;
+	bool IsPlex() const;
+	bool IsDifferential() const;
 
 	/* API for UTF-16 */
 	std::wstring SnapshotIDW() const;
@@ -84,8 +95,14 @@ public:
 	std::optional<SnapshotSetResult> CreateSnapshotsW(const std::vector<std::wstring>& wVolumePathList);
 	bool DeleteSnapshotW(const std::wstring& wSnapshotID);
 	bool DeleteSnapshot(const std::string& snapshotID);
+	bool DeleteSnapshotSetW(const std::wstring& wSnapshotSetID);
+	bool DeleteSnapshotSet(const std::string& snapshotSetID);
+	bool DeleteAllSnapshots();
 	std::optional<VssSnapshotProperty> GetSnapshotPropertyW(const std::wstring& wSnapshotID);
 	std::optional<VssSnapshotProperty> GetSnapshotProperty(const std::string& snapshotID);
+	std::vector<VssSnapshotProperty> QuerySnapshotSetW(const std::wstring& wSnapshotSetID);
+	std::vector<VssSnapshotProperty> QuerySnapshotSet(const std::string& snapshotSetID);
+	std::vector<VssSnapshotProperty> QueryAllSnapshots();
 	bool ExposeSnapshotLocallyW(const std::wstring& snapshotID, const std::wstring& wPath);
 	bool ExposeSnapshotLocally(const std::string& snapshotID, const std::string& path);
 private:

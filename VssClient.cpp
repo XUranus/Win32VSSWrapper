@@ -119,11 +119,6 @@ uint64_t VssSnapshotProperty::SnapshotsCount() const
 	return m_snapshotsCount;
 }
 
-uint64_t VssSnapshotProperty::SnapshotAttributes()const
-{
-	return m_snapshotAttributes;
-}
-
 uint64_t VssSnapshotProperty::CreateTime() const
 {
 	return m_createTime;
@@ -134,9 +129,64 @@ VSS_SNAPSHOT_STATE VssSnapshotProperty::Status() const
 	return m_status;
 }
 
-bool VssSnapshotProperty::ClientAccessible() const
+uint64_t VssSnapshotProperty::SnapshotAttributes()const
+{
+	return m_snapshotAttributes;
+}
+
+bool VssSnapshotProperty::IsClientAccessible() const
 {
 	return (m_snapshotAttributes & VSS_VOLSNAP_ATTR_CLIENT_ACCESSIBLE) != 0;
+}
+
+bool VssSnapshotProperty::IsExposedLocally() const
+{
+	return (m_snapshotAttributes & VSS_VOLSNAP_ATTR_EXPOSED_LOCALLY) != 0;
+}
+
+bool VssSnapshotProperty::IsExposedRemotely() const
+{
+	return (m_snapshotAttributes & VSS_VOLSNAP_ATTR_EXPOSED_REMOTELY) != 0;
+}
+
+bool VssSnapshotProperty::IsTransportable() const
+{
+	return (m_snapshotAttributes & VSS_VOLSNAP_ATTR_TRANSPORTABLE) != 0;
+}
+
+bool VssSnapshotProperty::IsNoAutoRelease() const
+{
+	return (m_snapshotAttributes & VSS_VOLSNAP_ATTR_NO_AUTO_RELEASE) != 0;
+}
+
+bool VssSnapshotProperty::IsPersistent() const
+{
+	return (m_snapshotAttributes & VSS_VOLSNAP_ATTR_PERSISTENT) != 0;
+}
+
+bool VssSnapshotProperty::IsHardwareAssisted() const
+{
+	return (m_snapshotAttributes & VSS_VOLSNAP_ATTR_HARDWARE_ASSISTED) != 0;
+}
+
+bool VssSnapshotProperty::IsNoWriters() const
+{
+	return (m_snapshotAttributes & VSS_VOLSNAP_ATTR_NO_WRITERS) != 0;
+}
+
+bool VssSnapshotProperty::IsImported() const
+{
+	return (m_snapshotAttributes & VSS_VOLSNAP_ATTR_IMPORTED) != 0;
+}
+
+bool VssSnapshotProperty::IsPlex() const
+{
+	return (m_snapshotAttributes & VSS_VOLSNAP_ATTR_PLEX) != 0;
+}
+
+bool VssSnapshotProperty::IsDifferential() const
+{
+	return (m_snapshotAttributes & VSS_VOLSNAP_ATTR_DIFFERENTIAL) != 0;
 }
 
 /* VssSnapshotProperty API for UTF-16 */
@@ -314,6 +364,41 @@ bool VssClient::DeleteSnapshot(const std::string& snapshotID)
 	return DeleteSnapshotW(wSnapshotID);
 }
 
+bool VssClient::DeleteSnapshotSetW(const std::wstring& wSnapshotSetID)
+{
+	LONG lSnapshots = 0;
+    VSS_ID idNonDeletedSnapshotID = GUID_NULL;
+	std::optional<VSS_ID> snapshotSetID = VssIDfromWStr(wSnapshotSetID);
+	if (!snapshotSetID) { /* invalid VSS ID */
+		return false;
+	}
+    HRESULT hr = m_pVssObject->DeleteSnapshots(
+        snapshotSetID.value(), 
+        VSS_OBJECT_SNAPSHOT_SET,
+        FALSE,
+        &lSnapshots,
+        &idNonDeletedSnapshotID);
+	CHECK_HR_RETURN(hr, "DeleteSnapshots", false);
+	return true;
+}
+
+bool VssClient::DeleteSnapshotSet(const std::string& snapshotSetID)
+{
+	return DeleteSnapshotW(Utf8ToUtf16(snapshotSetID));
+}
+
+bool VssClient::DeleteAllSnapshots()
+{
+	std::vector<VssSnapshotProperty> properties = QueryAllSnapshots();
+	bool ret = true;
+	for (const VssSnapshotProperty& property: properties) {
+		if (!DeleteSnapshot(property.SnapshotID())) {
+			ret = false; /* delete as many as possible */
+		}
+	}
+	return ret;
+}
+
 std::optional<VssSnapshotProperty> VssClient::GetSnapshotPropertyW(const std::wstring& wSnapshotIDStr)
 {
 	std::optional<VSS_ID> snapshotID = VssIDfromWStr(wSnapshotIDStr);
@@ -335,6 +420,54 @@ std::optional<VssSnapshotProperty> VssClient::GetSnapshotProperty(const std::str
 	return GetSnapshotPropertyW(wSnapshotIDstr);
 }
 
+std::vector<VssSnapshotProperty> VssClient::QuerySnapshotSetW(const std::wstring& wSnapshotSetID)
+{
+	std::vector<VssSnapshotProperty> properties = QueryAllSnapshots();
+	std::vector<VssSnapshotProperty> results;
+	for (const VssSnapshotProperty& property: properties) {
+		if (property.SnapshotSetIDW() == wSnapshotSetID) {
+			results.emplace_back(property);
+		}
+	}
+	return results;
+}
+
+std::vector<VssSnapshotProperty> VssClient::QuerySnapshotSet(const std::string& snapshotSetID)
+{
+	return QuerySnapshotSetW(Utf8ToUtf16(snapshotSetID));
+}
+
+std::vector<VssSnapshotProperty> VssClient::QueryAllSnapshots()
+{
+	std::vector<VssSnapshotProperty> results;
+	CComPtr<IVssEnumObject> pIEnumSnapshots;
+    HRESULT hr = m_pVssObject->Query(
+		GUID_NULL, 
+        VSS_OBJECT_NONE, 
+        VSS_OBJECT_SNAPSHOT, 
+    	&pIEnumSnapshots
+	);
+	CHECK_HR_RETURN(hr, "Query", results);
+	/* Enumerate all shadow copies. */
+    VSS_OBJECT_PROP prop;
+    VSS_SNAPSHOT_PROP& snap = prop.Obj.Snap;
+
+    while (true)
+    {
+        ULONG ulFetched;
+        hr = pIEnumSnapshots->Next(1, &prop, &ulFetched);
+        CHECK_HR_RETURN(hr, "pIEnumSnapshots->Next", results);
+
+        /* We reached the end of list */
+        if (ulFetched == 0) {
+            break;
+		}
+		results.emplace_back(snap);
+		::VssFreeSnapshotProperties(&snap);
+    }
+	return results;
+}
+
 bool VssClient::ExposeSnapshotLocallyW(const std::wstring& wSnapshotID, const std::wstring& wPath)
 {
 	std::optional<VssSnapshotProperty> property = GetSnapshotPropertyW(wSnapshotID);
@@ -343,7 +476,7 @@ bool VssClient::ExposeSnapshotLocallyW(const std::wstring& wSnapshotID, const st
 		return false;
 	}
 	/* client accessible snapshot cannot be exposed locally */
-	if (property->ClientAccessible() ||
+	if (property->IsClientAccessible() ||
 		!property->ExposedNameW().empty() ||
 		!property->ExposedPathW().empty()) {
 		return false;
