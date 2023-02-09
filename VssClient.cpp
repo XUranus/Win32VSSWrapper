@@ -263,10 +263,7 @@ std::wstring SnapshotSetResult::SnapshotSetIDW() const
 
 std::optional<SnapshotSetResult> VssClient::CreateSnapshotW(const std::wstring& wVolumePath)
 {
-	// hr = m_pVssObject->GatherWriterMetadata(&m_async);
-	// CHECK_HR_RETURN_FALSE(hr, "GatherWriterMetadata");
-	// hr = m_async->Wait();
-	// CHECK_HR_RETURN_FALSE(hr, "m_async->Wait");
+	/* no need to call GatherWriterMetadata due to no writers involved */
 
 	VSS_ID snapshotSetID;
 	HRESULT hr = m_pVssObject->StartSnapshotSet(&snapshotSetID);
@@ -278,19 +275,20 @@ std::optional<SnapshotSetResult> VssClient::CreateSnapshotW(const std::wstring& 
 	hr = m_pVssObject->AddToSnapshotSet(volume, GUID_NULL, &snapshotID);
     CHECK_HR_RETURN(hr, "AddToSnapshotSet", std::nullopt);
 
-	CComPtr<IVssAsync> pAsync;
-	hr = m_pVssObject->PrepareForBackup(&pAsync);
-	CHECK_HR_RETURN(hr, "PrepareForBackup", std::nullopt);
-	CHECK_BOOL_RETURN(WaitAndCheckForAsyncOperation(pAsync), "pAsync1->Wait", std::nullopt);
+	{
+		CComPtr<IVssAsync> pAsync;
+		hr = m_pVssObject->PrepareForBackup(&pAsync);
+		CHECK_HR_RETURN(hr, "PrepareForBackup", std::nullopt);
+		CHECK_BOOL_RETURN(WaitAndCheckForAsyncOperation(pAsync), "pAsync1->Wait", std::nullopt);
+	}
+	{
+		CComPtr<IVssAsync> pAsync;
+		hr = m_pVssObject->DoSnapshotSet(&pAsync);
+		CHECK_HR_RETURN(hr, "DoSnapshotSet", std::nullopt);
+		CHECK_BOOL_RETURN(WaitAndCheckForAsyncOperation(pAsync), "pAsync2->Wait", std::nullopt);
+	}
 
-	hr = m_pVssObject->DoSnapshotSet(&pAsync);
-	CHECK_HR_RETURN(hr, "DoSnapshotSet", std::nullopt);
-	CHECK_BOOL_RETURN(WaitAndCheckForAsyncOperation(pAsync), "pAsync2->Wait", std::nullopt);
-
-	//hr = m_pVssObject->BackupComplete(&pAsync);
-	//CHECK_HR_RETURN(hr, "BackupComplete", std::nullopt); // TODO:: try to figure out why crashed
-	//CHECK_BOOL_RETURN(WaitAndCheckForAsyncOperation(pAsync), "pAsync3->Wait", std::nullopt);
-	//std::cout << "bp3" << std::endl;
+	/* no need to call BackupComplete due to no writers involved */
 
 	std::optional<std::wstring> wSnapshotSetIDStr = VssID2WStr(snapshotSetID);
 	std::optional<std::wstring> wSnapshotIDStr = VssID2WStr(snapshotID);
