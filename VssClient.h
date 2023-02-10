@@ -107,11 +107,12 @@ public:
 	bool ExposeSnapshotLocally(const std::string& snapshotID, const std::string& path);
 private:
 	bool InitializeCom(); /* register this thread to Win32 COM */
-	bool Connect(); /* connect to Volume Shadows Service */
+	void UninitializeCom();
+	bool InitializeBackupContect(const VSS_SNAPSHOT_CONTEXT& context);
 	bool WaitAndCheckForAsyncOperation(IVssAsync* pAsync);
 	bool PrepareForBackupSync();
 	bool DoSnapshotSetSync();
-	void ReleaseResources();
+	bool InitializeVssComponent();
 private:
 	bool m_comInitialized = false;
 	IVssBackupComponents* m_pVssObject = nullptr;

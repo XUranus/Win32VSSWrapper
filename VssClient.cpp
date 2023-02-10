@@ -307,6 +307,7 @@ std::wstring SnapshotSetResult::SnapshotSetIDW() const
 
 std::optional<SnapshotSetResult> VssClient::CreateSnapshotsW(const std::vector<std::wstring>& wVolumePathList)
 {
+	InitializeBackupContect(VSS_CTX_APP_ROLLBACK);
 	SnapshotSetResult result;
 	/* no need to call GatherWriterMetadata due to no writers involved */
 	VSS_ID snapshotSetID;
@@ -342,6 +343,7 @@ std::optional<SnapshotSetResult> VssClient::CreateSnapshots(const std::vector<st
 
 bool VssClient::DeleteSnapshotW(const std::wstring& wSnapshotID)
 {
+	InitializeBackupContect(VSS_CTX_ALL);
 	LONG lSnapshots = 0;
     VSS_ID idNonDeletedSnapshotID = GUID_NULL;
 	std::optional<VSS_ID> snapshotID = VssIDfromWStr(wSnapshotID);
@@ -366,6 +368,7 @@ bool VssClient::DeleteSnapshot(const std::string& snapshotID)
 
 bool VssClient::DeleteSnapshotSetW(const std::wstring& wSnapshotSetID)
 {
+	InitializeBackupContect(VSS_CTX_ALL);
 	LONG lSnapshots = 0;
     VSS_ID idNonDeletedSnapshotID = GUID_NULL;
 	std::optional<VSS_ID> snapshotSetID = VssIDfromWStr(wSnapshotSetID);
@@ -401,6 +404,7 @@ bool VssClient::DeleteAllSnapshots()
 
 std::optional<VssSnapshotProperty> VssClient::GetSnapshotPropertyW(const std::wstring& wSnapshotIDStr)
 {
+	InitializeBackupContect(VSS_CTX_ALL);
 	std::optional<VSS_ID> snapshotID = VssIDfromWStr(wSnapshotIDStr);
 	if (!snapshotID) {
 		return std::nullopt;
@@ -439,6 +443,7 @@ std::vector<VssSnapshotProperty> VssClient::QuerySnapshotSet(const std::string& 
 
 std::vector<VssSnapshotProperty> VssClient::QueryAllSnapshots()
 {
+	InitializeBackupContect(VSS_CTX_ALL);
 	std::vector<VssSnapshotProperty> results;
 	CComPtr<IVssEnumObject> pIEnumSnapshots;
     HRESULT hr = m_pVssObject->Query(
@@ -456,10 +461,8 @@ std::vector<VssSnapshotProperty> VssClient::QueryAllSnapshots()
     {
         ULONG ulFetched;
         hr = pIEnumSnapshots->Next(1, &prop, &ulFetched);
-        CHECK_HR_RETURN(hr, "pIEnumSnapshots->Next", results);
-
         /* We reached the end of list */
-        if (ulFetched == 0) {
+        if (FAILED(hr) || ulFetched == 0) {
             break;
 		}
 		results.emplace_back(snap);
@@ -470,6 +473,7 @@ std::vector<VssSnapshotProperty> VssClient::QueryAllSnapshots()
 
 bool VssClient::ExposeSnapshotLocallyW(const std::wstring& wSnapshotID, const std::wstring& wPath)
 {
+	InitializeBackupContect(VSS_CTX_ALL);
 	std::optional<VssSnapshotProperty> property = GetSnapshotPropertyW(wSnapshotID);
 	/* invalid snapshot ID */
 	if (!property) {
@@ -501,17 +505,19 @@ bool VssClient::ExposeSnapshotLocally(const std::string& snapshotID, const std::
 VssClient::VssClient()
 {
 	InitializeCom();
-	Connect();
 }
 
 VssClient::~VssClient()
 {
-	ReleaseResources();
+	UninitializeCom();
 }
 
 /* initialzie COM */
 bool VssClient::InitializeCom()
 {
+	if (m_comInitialized) {
+		return true;
+	}
 	HRESULT hr = ::CoInitializeEx(nullptr, COINIT::COINIT_MULTITHREADED);
     CHECK_HR_RETURN_FALSE(hr, "CoInitializeEx");
 	m_comInitialized = true;
@@ -530,15 +536,23 @@ bool VssClient::InitializeCom()
 	return true;
 }
 
-bool VssClient::Connect()
+void VssClient::UninitializeCom()
 {
-	HRESULT hr = ::CreateVssBackupComponents(&m_pVssObject);
-	CHECK_HR_RETURN_FALSE(hr, "CreateVssBackupComponents");
+	if (!m_comInitialized) {
+		return;
+	}
+	::CoUninitialize();
+	m_comInitialized = false;
+}
 
-	hr = m_pVssObject->InitializeForBackup();
+bool VssClient::InitializeBackupContect(const VSS_SNAPSHOT_CONTEXT& context)
+{
+	CHECK_BOOL_RETURN(InitializeVssComponent(), "InitializeVssComponent", false);
+
+	HRESULT hr = m_pVssObject->InitializeForBackup();
 	CHECK_HR_RETURN_FALSE(hr, "InitializeForBackup");
 
-	hr = m_pVssObject->SetContext(VSS_CTX_APP_ROLLBACK);
+	hr = m_pVssObject->SetContext(context);
 	CHECK_HR_RETURN_FALSE(hr, "SetContext");
 
 	hr = m_pVssObject->SetBackupState(true, false, VSS_BT_FULL, false);
@@ -581,16 +595,15 @@ bool VssClient::DoSnapshotSetSync()
 	return true;
 }
 
-void VssClient::ReleaseResources()
+bool VssClient::InitializeVssComponent()
 {
 	if (m_pVssObject != nullptr) {
 		m_pVssObject->Release();
 		m_pVssObject = nullptr;
 	}
-	if (m_comInitialized) {
-		::CoUninitialize();
-		m_comInitialized = false;
-	}
+	HRESULT hr = ::CreateVssBackupComponents(&m_pVssObject);
+	CHECK_HR_RETURN_FALSE(hr, "CreateVssBackupComponents");
+	return true;
 }
 
 #endif
