@@ -16,13 +16,21 @@
 #include <vsbackup.h>
 #include <comdef.h>
 
+/**
+ * This util is a simple wrapper for Windows Volume Shadow Service,
+ * providing snapshot creation/query/delete,
+ * involving no writers
+ */
 namespace Win32VSSWrapper {
 
+/**
+ * Detail information of a VSS Snapshot 
+ */
 class VssSnapshotProperty {
 public:
 	VssSnapshotProperty(const VSS_SNAPSHOT_PROP &prop);
 
-	uint64_t CreateTime() const;
+	uint64_t CreateTime() const; /* snapshot creation time in Windows timestamp (from 1960) */
 	VSS_SNAPSHOT_STATE Status() const;
 	uint64_t SnapshotsCount() const;
 
@@ -76,6 +84,12 @@ private:
 	VSS_SNAPSHOT_STATE m_status;
 };
 
+/**
+ * Snapshot creation result,
+ * each creation operation will return a snapshot set ID, and few snapshots ID,
+ * VSS using VSS_ID (GUID) as the unique ID of a snapshot/snapshot set,
+ * while API here using std::wstring to represent it
+ */
 class SnapshotSetResult {
 public:
 	std::vector<std::wstring> m_wSnapshotIDList;
@@ -87,6 +101,10 @@ public:
 	std::wstring SnapshotSetIDW() const;
 };
 
+/**
+ * The class providing snapshot creation/delete/query
+ * Not thread-safe
+ */
 class VssClient {
 public:
 	VssClient();

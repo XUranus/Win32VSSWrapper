@@ -10,13 +10,6 @@
 using namespace std;
 using namespace Win32VSSWrapper;
 
-namespace {
-constexpr auto VOLUME_BUFFER_MAX_LEN = MAX_PATH;
-constexpr auto VOLUME_PATH_MAX_LEN = MAX_PATH + 1;
-constexpr auto DEVICE_BUFFER_MAX_LEN = MAX_PATH;
-constexpr auto VSS_ID_MAX_LEN = 100;
-}
-
 std::optional<std::wstring> VssID2WStr(const VSS_ID& vssID)
 {
 	LPOLESTR wVssIDBuf = nullptr;
@@ -38,16 +31,6 @@ std::optional<VSS_ID> VssIDfromWStr(const std::wstring& vssIDWstr)
 	}
 	return std::make_optional<VSS_ID>(vssID);
 }
-
-#define CHECK_HR_RETURN_FALSE(HR, FUNC) \
-	do { \
-		_com_error err(HR); \
-		if (FAILED(HR)) { \
-			fprintf(stderr, "Failed to call " ## FUNC ## ", %s\n", err.ErrorMessage()); \
-			return false; \
-		} \
-	} \
-	while (0)
 
 #define CHECK_HR_RETURN(HR, FUNC, RET) \
 	do { \
@@ -509,6 +492,10 @@ VssClient::VssClient()
 
 VssClient::~VssClient()
 {
+	if (m_pVssObject != nullptr) {
+		m_pVssObject->Release();
+		m_pVssObject = nullptr;
+	}
 	UninitializeCom();
 }
 
@@ -519,7 +506,7 @@ bool VssClient::InitializeCom()
 		return true;
 	}
 	HRESULT hr = ::CoInitializeEx(nullptr, COINIT::COINIT_MULTITHREADED);
-    CHECK_HR_RETURN_FALSE(hr, "CoInitializeEx");
+    CHECK_HR_RETURN(hr, "CoInitializeEx", false);
 	m_comInitialized = true;
 	hr = CoInitializeSecurity(
             NULL,                           //  Allow *all* VSS writers to communicate back!
@@ -532,7 +519,7 @@ bool VssClient::InitializeCom()
             EOAC_DYNAMIC_CLOAKING,          //  Cloaking
             NULL                            //  Reserved parameter
         );
-	CHECK_HR_RETURN_FALSE(hr, "CoInitializeSecurity");
+	CHECK_HR_RETURN(hr, "CoInitializeSecurity", false);
 	return true;
 }
 
@@ -550,13 +537,13 @@ bool VssClient::InitializeBackupContect(const VSS_SNAPSHOT_CONTEXT& context)
 	CHECK_BOOL_RETURN(InitializeVssComponent(), "InitializeVssComponent", false);
 
 	HRESULT hr = m_pVssObject->InitializeForBackup();
-	CHECK_HR_RETURN_FALSE(hr, "InitializeForBackup");
+	CHECK_HR_RETURN(hr, "InitializeForBackup", false);
 
 	hr = m_pVssObject->SetContext(context);
-	CHECK_HR_RETURN_FALSE(hr, "SetContext");
+	CHECK_HR_RETURN(hr, "SetContext", false);
 
 	hr = m_pVssObject->SetBackupState(true, false, VSS_BT_FULL, false);
-	CHECK_HR_RETURN_FALSE(hr, "SetBackupState");
+	CHECK_HR_RETURN(hr, "SetBackupState", false);
 
 	return true;
 }
@@ -564,15 +551,15 @@ bool VssClient::InitializeBackupContect(const VSS_SNAPSHOT_CONTEXT& context)
 bool VssClient::WaitAndCheckForAsyncOperation(IVssAsync* pAsync)
 {
     HRESULT hr = pAsync->Wait();
-	CHECK_HR_RETURN_FALSE(hr, "WaitAndCheckForAsyncOperation pAsync->Wait");
+	CHECK_HR_RETURN(hr, "WaitAndCheckForAsyncOperation pAsync->Wait", false);
 
     /* Check the result of the asynchronous operation */
     HRESULT hrReturned = S_OK;
     hr = pAsync->QueryStatus(&hrReturned, nullptr);
-	CHECK_HR_RETURN_FALSE(hr, "WaitAndCheckForAsyncOperation pAsync->QueryStatus");
+	CHECK_HR_RETURN(hr, "WaitAndCheckForAsyncOperation pAsync->QueryStatus", false);
 
     /* Check if the async operation succeeded... */
-    CHECK_HR_RETURN_FALSE(hrReturned, "WaitAndCheckForAsyncOperation return false");
+    CHECK_HR_RETURN(hrReturned, "WaitAndCheckForAsyncOperation return false", false);
 
 	return true;
 }
@@ -602,7 +589,7 @@ bool VssClient::InitializeVssComponent()
 		m_pVssObject = nullptr;
 	}
 	HRESULT hr = ::CreateVssBackupComponents(&m_pVssObject);
-	CHECK_HR_RETURN_FALSE(hr, "CreateVssBackupComponents");
+	CHECK_HR_RETURN(hr, "CreateVssBackupComponents", false);
 	return true;
 }
 
