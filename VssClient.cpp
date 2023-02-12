@@ -6,9 +6,29 @@
 #include <codecvt>
 #include <optional>
 #include <atlbase.h>
+#include <cstdio>
 
 using namespace std;
 using namespace Win32VSSWrapper;
+
+#define CHECK_HR_RETURN(HR, FUNC, RET) \
+	do { \
+		_com_error err(HR); \
+		if (HR != S_OK) { \
+			::fprintf(stderr, "HRESULT Return FAILED, Function: " ## FUNC ## ", Error: %s\n", err.ErrorMessage()); \
+			return RET; \
+		} \
+	} \
+	while (0)
+
+#define CHECK_BOOL_RETURN(BOOLVALUE, FUNC, RET) \
+	do { \
+		if ((!BOOLVALUE)) { \
+			::fprintf(stderr, "Boolean Return False, Function: " ## FUNC ## "\n"); \
+			return RET; \
+		} \
+	} \
+	while (0)
 
 std::optional<std::wstring> VssID2WStr(const VSS_ID& vssID)
 {
@@ -31,26 +51,6 @@ std::optional<VSS_ID> VssIDfromWStr(const std::wstring& vssIDWstr)
 	}
 	return std::make_optional<VSS_ID>(vssID);
 }
-
-#define CHECK_HR_RETURN(HR, FUNC, RET) \
-	do { \
-		_com_error err(HR); \
-		if (HR != S_OK) { \
-			fprintf(stderr, "Failed to call " ## FUNC ## ", %s\n", err.ErrorMessage()); \
-			return RET; \
-		} \
-	} \
-	while (0)
-
-#define CHECK_BOOL_RETURN(BOOLVALUE, FUNC, RET) \
-	do { \
-		if ((!BOOLVALUE)) { \
-			fprintf(stderr, "Failed to call " ## FUNC ## "\n"); \
-			return RET; \
-		} \
-	} \
-	while (0)
-
 
 std::wstring Utf8ToUtf16(const std::string& str)
 {
@@ -307,7 +307,6 @@ std::optional<SnapshotSetResult> VssClient::CreateSnapshotsW(const std::vector<s
 		CHECK_HR_RETURN(hr, "AddToSnapshotSet", std::nullopt);
 		result.m_wSnapshotIDList.emplace_back(VssID2WStr(snapshotID).value());
 	}
-
 	CHECK_BOOL_RETURN(PrepareForBackupSync(), "PrepareForBackupSync", std::nullopt);
 	CHECK_BOOL_RETURN(DoSnapshotSetSync(), "DoSnapshotSetSync", std::nullopt);
 
@@ -509,16 +508,16 @@ bool VssClient::InitializeCom()
     CHECK_HR_RETURN(hr, "CoInitializeEx", false);
 	m_comInitialized = true;
 	hr = CoInitializeSecurity(
-            NULL,                           //  Allow *all* VSS writers to communicate back!
-            -1,                             //  Default COM authentication service
-            NULL,                           //  Default COM authorization service
-            NULL,                           //  reserved parameter
-            RPC_C_AUTHN_LEVEL_PKT_PRIVACY,  //  Strongest COM authentication level
-            RPC_C_IMP_LEVEL_IMPERSONATE,    //  Minimal impersonation abilities 
-            NULL,                           //  Default COM authentication settings
-            EOAC_DYNAMIC_CLOAKING,          //  Cloaking
-            NULL                            //  Reserved parameter
-        );
+		NULL,                           //  Allow *all* VSS writers to communicate back!
+		-1,                             //  Default COM authentication service
+		NULL,                           //  Default COM authorization service
+		NULL,                           //  reserved parameter
+		RPC_C_AUTHN_LEVEL_PKT_PRIVACY,  //  Strongest COM authentication level
+		RPC_C_IMP_LEVEL_IMPERSONATE,    //  Minimal impersonation abilities 
+		NULL,                           //  Default COM authentication settings
+		EOAC_DYNAMIC_CLOAKING,          //  Cloaking
+		NULL                            //  Reserved parameter
+	);
 	CHECK_HR_RETURN(hr, "CoInitializeSecurity", false);
 	return true;
 }
@@ -559,8 +558,9 @@ bool VssClient::WaitAndCheckForAsyncOperation(IVssAsync* pAsync)
 	CHECK_HR_RETURN(hr, "WaitAndCheckForAsyncOperation pAsync->QueryStatus", false);
 
     /* Check if the async operation succeeded... */
-    CHECK_HR_RETURN(hrReturned, "WaitAndCheckForAsyncOperation return false", false);
-
+   	if (hrReturned != VSS_S_ASYNC_FINISHED) {
+		return false;
+	}
 	return true;
 }
 
