@@ -121,8 +121,8 @@ public:
     std::vector<VssSnapshotProperty> QuerySnapshotSetW(const std::wstring& wSnapshotSetID);
     std::vector<VssSnapshotProperty> QuerySnapshotSet(const std::string& snapshotSetID);
     std::vector<VssSnapshotProperty> QueryAllSnapshots();
-    bool ExposeSnapshotLocallyW(const std::wstring& snapshotID, const std::wstring& wPath);
-    bool ExposeSnapshotLocally(const std::string& snapshotID, const std::string& path);
+    std::optional<std::wstring> ExposeSnapshotLocallyW(const std::wstring& snapshotID, const std::wstring& wPath);
+    std::optional<std::string> ExposeSnapshotLocally(const std::string& snapshotID, const std::string& path);
     bool MakeSnapshotWritable(const std::string& snapshotID);
     bool MakeSnapshotWritableW(const std::wstring& wSnapshotID);
     bool VssClient::UnExposeSnapshot(const std::string& snapshotID);

@@ -198,9 +198,9 @@ int DoCommandDeleteSnapshotSet(const std::wstring& wSnapshotSetID)
 int DoCommandMountSnapshot(const std::wstring& wSnapshotID, const std::wstring& wPath)
 {
 	VssClient vssClient;
-	bool success = vssClient.ExposeSnapshotLocallyW(wSnapshotID, wPath);
-	if (success) {
-		std::wcout << L"Mount Success" << std::endl;
+	std::optional<std::wstring> exposeNameW = vssClient.ExposeSnapshotLocallyW(wSnapshotID, wPath);
+	if (exposeNameW) {
+		std::wcout << L"Expose Name: " << exposeNameW.value() << std::endl;
 		return 0;
 	} else {
 		std::wcout << L"Mount Failed" << std::endl;

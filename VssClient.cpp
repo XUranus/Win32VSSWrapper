@@ -1,7 +1,11 @@
 ﻿#include "VssClient.h"
 
 #ifdef WIN32
-#define _SILENCE_CXX17_CODECVT_HEADER_DEPRECATION_WARNING 1
+
+#ifndef _SILENCE_CXX17_CODECVT_HEADER_DEPRECATION_WARNING
+#define _SILENCE_CXX17_CODECVT_HEADER_DEPRECATION_WARNING
+#endif
+
 #include <locale>
 #include <codecvt>
 #include <optional>
@@ -452,19 +456,19 @@ std::vector<VssSnapshotProperty> VssClient::QueryAllSnapshots()
     return results;
 }
 
-bool VssClient::ExposeSnapshotLocallyW(const std::wstring& wSnapshotID, const std::wstring& wPath)
+std::optional<std::wstring> VssClient::ExposeSnapshotLocallyW(const std::wstring& wSnapshotID, const std::wstring& wPath)
 {
     InitializeBackupContect(VSS_CTX_ALL);
     std::optional<VssSnapshotProperty> property = GetSnapshotPropertyW(wSnapshotID);
     /* invalid snapshot ID */
     if (!property) {
-        return false;
+        return std::nullopt;
     }
     /* client accessible snapshot cannot be exposed locally */
     if (property->IsClientAccessible() ||
         !property->ExposedNameW().empty() ||
         !property->ExposedPathW().empty()) {
-        return false;
+        return std::nullopt;
     }
     std::wstring wMountPath = wPath; /* final mount path */
     if (!wMountPath.empty() && wMountPath.back() != L'\\') {
@@ -478,14 +482,23 @@ bool VssClient::ExposeSnapshotLocallyW(const std::wstring& wSnapshotID, const st
         VSS_VOLSNAP_ATTR_EXPOSED_LOCALLY,
         (VSS_PWSZ)wMountPath.c_str(),
         &pwszExposed);
-    CHECK_HR_RETURN(hr, "ExposeSnapshot", false);
+
+    CHECK_HR_RETURN(hr, "ExposeSnapshot", std::nullopt);
+
+    std::wstring exposeNameW(pwszExposed);
+    ::CoTaskMemFree(pwszExposed);
     
-    return true;
+    return std::make_optional<std::wstring>(exposeNameW);
 }
 
-bool VssClient::ExposeSnapshotLocally(const std::string& snapshotID, const std::string& path)
+
+std::optional<std::string> VssClient::ExposeSnapshotLocally(const std::string& snapshotID, const std::string& path)
 {
-    return ExposeSnapshotLocallyW(Utf8ToUtf16(snapshotID), Utf8ToUtf16(path));
+    std::optional<std::wstring> exposeNameW = ExposeSnapshotLocallyW(Utf8ToUtf16(snapshotID), Utf8ToUtf16(path));
+    if (!exposeNameW) {
+        return std::nullopt;
+    }
+    return std::make_optional<std::string>(Utf16ToUtf8(exposeNameW.value()));
 }
 
 
