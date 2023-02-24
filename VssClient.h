@@ -123,6 +123,10 @@ public:
     std::vector<VssSnapshotProperty> QueryAllSnapshots();
     bool ExposeSnapshotLocallyW(const std::wstring& snapshotID, const std::wstring& wPath);
     bool ExposeSnapshotLocally(const std::string& snapshotID, const std::string& path);
+    bool MakeSnapshotWritable(const std::string& snapshotID);
+    bool MakeSnapshotWritableW(const std::wstring& wSnapshotID);
+    bool VssClient::UnExposeSnapshot(const std::string& snapshotID);
+    bool VssClient::UnExposeSnapshotW(const std::wstring& wSnapshotID);
 private:
     bool InitializeCom(); /* register this thread to Win32 COM */
     void UninitializeCom();

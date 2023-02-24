@@ -25,4 +25,7 @@ vssclient delete all                                   ----  delete all snapshot
 vssclient create <volumePath1> <volumePath2> ...       ----  create snapshot(set) for specified volumes
 vssclient query <snapshotID>                           ----  query specified snapshot
 vssclient mount <snapshotID> <path>                    ----  expose specified snapshot 
+vssclient umount <snapshotID>                          ----  umount specified snapshot
+vssclient delset <snapshotSetID                        ----  delete snapshot set specified
+vssclient mkwritable <snapshotID>                      ----  make snapshot writable (must have hardware provider)
 ```

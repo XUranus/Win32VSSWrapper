@@ -391,7 +391,6 @@ std::optional<VssSnapshotProperty> VssClient::GetSnapshotPropertyW(const std::ws
     if (!snapshotID) {
         return std::nullopt;
     }
-
     VSS_SNAPSHOT_PROP snapshotProp;
     HRESULT hr = m_pVssObject->GetSnapshotProperties(snapshotID.value(), &snapshotProp);
     CHECK_HR_RETURN(hr, "GetSnapshotProperties", std::nullopt);
@@ -473,7 +472,12 @@ bool VssClient::ExposeSnapshotLocallyW(const std::wstring& wSnapshotID, const st
     }
     LPWSTR pwszExposed = nullptr;
     VSS_ID vssID = VssIDfromWStr(wSnapshotID).value();
-    HRESULT hr = m_pVssObject->ExposeSnapshot(vssID,nullptr,VSS_VOLSNAP_ATTR_EXPOSED_LOCALLY, (VSS_PWSZ)wMountPath.c_str(), &pwszExposed);
+    HRESULT hr = m_pVssObject->ExposeSnapshot(
+        vssID,
+        nullptr,
+        VSS_VOLSNAP_ATTR_EXPOSED_LOCALLY,
+        (VSS_PWSZ)wMountPath.c_str(),
+        &pwszExposed);
     CHECK_HR_RETURN(hr, "ExposeSnapshot", false);
     
     return true;
@@ -482,6 +486,54 @@ bool VssClient::ExposeSnapshotLocallyW(const std::wstring& wSnapshotID, const st
 bool VssClient::ExposeSnapshotLocally(const std::string& snapshotID, const std::string& path)
 {
     return ExposeSnapshotLocallyW(Utf8ToUtf16(snapshotID), Utf8ToUtf16(path));
+}
+
+
+bool VssClient::MakeSnapshotWritable(const std::string& snapshotID)
+{
+    return MakeSnapshotWritableW(Utf8ToUtf16(snapshotID));
+}
+
+bool VssClient::MakeSnapshotWritableW(const std::wstring& wSnapshotID)
+{
+    InitializeBackupContect(VSS_CTX_ALL);
+    std::optional<VSS_ID> snapshotID = VssIDfromWStr(wSnapshotID);
+    if (!snapshotID) {
+        return false;
+    }
+    CComPtr<IVssAsync> pAsync;
+    CComPtr<IVssBackupComponentsEx2> pVssObjectEx2;
+    m_pVssObject->QueryInterface(__uuidof(IVssBackupComponentsEx2), (void**)(&pVssObjectEx2));
+
+    HRESULT hr = pVssObjectEx2->BreakSnapshotSetEx(
+        snapshotID.value(),
+        VSS_BREAKEX_FLAG_MAKE_READ_WRITE,
+        &pAsync);
+    CHECK_HR_RETURN(hr, "BreakSnapshotSetEx", false);
+    CHECK_BOOL_RETURN(WaitAndCheckForAsyncOperation(pAsync), "BreakSnapshotSetEx Wait", false);
+    return true;
+}
+
+
+bool VssClient::UnExposeSnapshot(const std::string& snapshotID)
+{
+    return UnExposeSnapshotW(Utf8ToUtf16(snapshotID));
+}
+
+bool VssClient::UnExposeSnapshotW(const std::wstring& wSnapshotID)
+{
+    InitializeBackupContect(VSS_CTX_ALL);
+    std::optional<VSS_ID> snapshotID = VssIDfromWStr(wSnapshotID);
+    if (!snapshotID) {
+        return false;
+    }
+    CComPtr<IVssAsync> pAsync;
+    CComPtr<IVssBackupComponentsEx2> pVssObjectEx2;
+    m_pVssObject->QueryInterface(__uuidof(IVssBackupComponentsEx2), (void**)(&pVssObjectEx2));
+
+    HRESULT hr = pVssObjectEx2->UnexposeSnapshot(snapshotID.value());
+    CHECK_HR_RETURN(hr, "UnexposeSnapshot", false);
+    return true;
 }
 
 VssClient::VssClient()

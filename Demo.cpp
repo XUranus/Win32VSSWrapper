@@ -26,6 +26,8 @@ void PrintHelp()
 	std::cout << "vssclient delete all" << std::endl;
 	std::cout << "vssclient delset <snapshotSetID>" << std::endl;
 	std::cout << "vssclient mount <snapshotID> <path>" << std::endl;
+	std::cout << "vssclient umount <snapshotID>" << std::endl;
+	std::cout << "vssclient mkwritable <snapshotID>" << std::endl;
 }
 
 void PrintVssSnapshotPropertyAttributes(const VssSnapshotProperty& property)
@@ -207,6 +209,34 @@ int DoCommandMountSnapshot(const std::wstring& wSnapshotID, const std::wstring& 
 	return 0;
 }
 
+int DoCommandUmountSnapshot(const std::wstring& wSnapshotID)
+{
+	VssClient vssClient;
+	bool success = vssClient.UnExposeSnapshotW(wSnapshotID);
+	if (success) {
+		std::wcout << L"Umount Success" << std::endl;
+		return 0;
+	} else {
+		std::wcout << L"Umount Failed" << std::endl;
+		return -1;
+	}
+	return 0;
+}
+
+int DoCommandSnapshotWritable(const std::wstring& wSnapshotID)
+{
+	VssClient vssClient;
+	bool success = vssClient.MakeSnapshotWritableW(wSnapshotID);
+	if (success) {
+		std::wcout << L"Make writable Success" << std::endl;
+		return 0;
+	} else {
+		std::wcout << L"Make writable Failed" << std::endl;
+		return -1;
+	}
+	return 0;
+}
+
 int wmain(int argc, WCHAR** argv)
 {
 	::SetConsoleOutputCP(65001); // forcing cmd to use UTF-8 output encoding
@@ -234,7 +264,14 @@ int wmain(int argc, WCHAR** argv)
 			return DoCommandDeleteSnapshotSet(std::wstring(argv[i + 1]));
 		} else if (wOption == L"mount" && i + 2 < argc) {
 			return DoCommandMountSnapshot(std::wstring(argv[i + 1]), std::wstring(argv[i + 2]));
-		} else {
+		} else if (wOption == L"mount" && i + 2 < argc) {
+			return DoCommandMountSnapshot(std::wstring(argv[i + 1]), std::wstring(argv[i + 2]));
+		} else if (wOption == L"umount" && i + 1 < argc) {
+			return DoCommandUmountSnapshot(std::wstring(argv[i + 1]));
+		} else if (wOption == L"mkwritable" && i + 1 < argc) {
+			return DoCommandSnapshotWritable(std::wstring(argv[i + 1]));
+		}
+		else {
 			std::wcout << L"Illegal Command" << std::endl;
 			PrintHelp();
 			return -1;
