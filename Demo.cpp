@@ -1,5 +1,5 @@
 ﻿#pragma execution_character_set("utf-8")
-#ifdef WIN32
+#ifdef _WIN32
 
 #include <iostream>
 #include <fstream>
@@ -7,7 +7,10 @@
 #include <ctime>
 #include <set>
 #include "VssClient.h"
+
+#ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
+#endif
 #include <Windows.h>
 
 /**
@@ -17,17 +20,17 @@ using namespace Win32VSSWrapper;
 
 void PrintHelp()
 {
-	std::cout << "vssclient, manpulate VSS for windows" << std::endl;
-	std::cout << "Usage: " << std::endl;
-	std::cout << "vssclient list" << std::endl;
-	std::cout << "vssclient query <snapshotID>" << std::endl;
-	std::cout << "vssclient create <volumePath1> <volumePath2> ..." << std::endl;
-	std::cout << "vssclient delete <snapshotID>" << std::endl;
-	std::cout << "vssclient delete all" << std::endl;
-	std::cout << "vssclient delset <snapshotSetID>" << std::endl;
-	std::cout << "vssclient mount <snapshotID> <path>" << std::endl;
-	std::cout << "vssclient umount <snapshotID>" << std::endl;
-	std::cout << "vssclient mkwritable <snapshotID>" << std::endl;
+	std::wcout << L"vssclient, manpulate VSS for windows" << std::endl;
+	std::wcout << L"Usage: " << std::endl;
+	std::wcout << L"vssclient list" << std::endl;
+	std::wcout << L"vssclient query <snapshotID>" << std::endl;
+	std::wcout << L"vssclient create <volumePath1> <volumePath2> ..." << std::endl;
+	std::wcout << L"vssclient delete <snapshotID>" << std::endl;
+	std::wcout << L"vssclient delete all" << std::endl;
+	std::wcout << L"vssclient delset <snapshotSetID>" << std::endl;
+	std::wcout << L"vssclient mount <snapshotID> <path>" << std::endl;
+	std::wcout << L"vssclient umount <snapshotID>" << std::endl;
+	std::wcout << L"vssclient mkwritable <snapshotID>" << std::endl;
 }
 
 void PrintVssSnapshotPropertyAttributes(const VssSnapshotProperty& property)

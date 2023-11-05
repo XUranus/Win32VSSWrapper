@@ -1,6 +1,4 @@
-﻿#include "VssClient.h"
-
-#ifdef WIN32
+﻿#ifdef _WIN32
 
 #ifndef _SILENCE_CXX17_CODECVT_HEADER_DEPRECATION_WARNING
 #define _SILENCE_CXX17_CODECVT_HEADER_DEPRECATION_WARNING
@@ -11,6 +9,15 @@
 #include <optional>
 #include <atlbase.h>
 #include <cstdio>
+
+#include <Windows.h>
+#include <objbase.h>
+#include <vss.h>
+#include <vswriter.h>
+#include <vsbackup.h>
+#include <comdef.h>
+
+#include "VssClient.h"
 
 using namespace std;
 using namespace Win32VSSWrapper;
@@ -33,6 +40,20 @@ using namespace Win32VSSWrapper;
         } \
     } \
     while (0)
+
+/**
+ * An Util Class, Used to automatically release a CoTaskMemAlloc allocated pointer
+ * when the instance of this class goes out of scope（RAII)
+ * (even if an exception is thrown)
+ **/
+class CAutoComPointer
+{
+public:
+    CAutoComPointer(LPVOID ptr): m_ptr(ptr) {};
+    ~CAutoComPointer() { ::CoTaskMemFree(m_ptr); }
+private:
+    LPVOID m_ptr;
+};
 
 std::optional<std::wstring> VssID2WStr(const VSS_ID& vssID)
 {
